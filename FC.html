@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climb Up - Défis avec Climby</title>
+    <!-- Tailwind CSS pour le style -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons pour les icônes -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes climbBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .modal-animate {
+            animation: slideUp 0.3s ease-out forwards;
+        }
+        .climby-bounce {
+            animation: climbBounce 2s ease-in-out infinite;
+        }
+        .shake-error {
+            animation: shake 0.4s ease-in-out;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased select-none transition-colors duration-500 overflow-x-hidden relative">
+
+    <!-- Mascotte Climby accrochée sur le côté droit (style rigolo pour les enfants) -->
+    <div class="fixed right-0 top-1/3 z-50 pointer-events-none hidden lg:flex flex-col items-center climby-bounce">
+        <div class="bg-white/90 backdrop-blur-sm border-2 border-purple-200 px-3 py-1.5 rounded-l-2xl shadow-lg mb-1 text-[11px] font-black text-purple-700">
+            Coucou ! 👋
+        </div>
+        <div class="w-24 h-28 bg-white border-4 border-purple-300 rounded-l-3xl shadow-2xl flex flex-col items-center justify-center relative overflow-hidden pointer-events-auto">
+            <!-- Corps pelucheux blanc -->
+            <div class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                <!-- Visage -->
+                <div class="w-12 h-10 bg-white rounded-full shadow-inner flex flex-col items-center justify-center border border-slate-200 relative mb-1">
+                    <div class="flex gap-2 mb-1">
+                        <div class="w-1.5 h-1.5 bg-slate-800 rounded-full"></div>
+                        <div class="w-1.5 h-1.5 bg-slate-800 rounded-full"></div>
+                    </div>
+                    <div class="w-3 h-1.5 bg-teal-600 rounded-full"></div>
+                </div>
+                <!-- Baudrier orange -->
+                <div class="w-full h-4 bg-orange-500 border-y border-orange-600 flex justify-around items-center shadow-sm">
+                    <div class="w-2 h-2 bg-yellow-300 rounded-full border border-orange-700"></div>
+                    <div class="w-2 h-2 bg-yellow-300 rounded-full border border-orange-700"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="app"></div>
+
+    <!-- Firebase SDK (Module) -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCAzdG02k6xz_cjZlO7mHvgE4Qtm48ZJZs",
+            authDomain: "climb-up-fc.firebaseapp.com",
+            projectId: "climb-up-fc",
+            storageBucket: "climb-up-fc.firebasestorage.app",
+            messagingSenderId: "871519294868",
+            appId: "1:871519294868:web:3dca6788ef92dbad8c2b81",
+            measurementId: "G-XK39EL0BTM"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        window.firebaseApp = app; // Rétrocompatibilité globale si besoin
+    </script>
+
+    <script>
+        // --- DONNÉES DES ATELIERS & RÉPONSES DU DÉFI DE CLIMBY ---
+        const REPONSES_CLIMBY = {
+            'bambous': 7,
+            'faceaface': 12,
+            'zigzag': 4,
+            'nuages': 3,
+            'fissure': 9,
+            'haricot': 5,
+            'labyrinthe': 8,
+            'tangrams': 6,
+            'chrono_gauche': 2,
+            'chrono_droit': 1,
+            'diedre': 10,
+            'dinosaures': 13,
+            'tuyaux': 11,
+            'gratteciel': 15,
+            'planetes': 14,
+            'engrenage': 18,
+            'rondin': 16,
+            'echelle': 17,
+            'tornade': 19
+        };
+
+        const ATELIERS = [
+            {
+                id: 'bambous', name: 'Les bambous',
+                defis: [{ id: 'b1', text: 'Être debout sur le dernier bambou', points: 5 }, { id: 'b2', text: 'Monter sans les mains', points: 10 }, { id: 'b3', text: 'Monter les yeux bandés', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-sky-950 w-full h-full flex items-end justify-center gap-1 sm:gap-1.5 px-2 overflow-hidden">
+                        ${[20, 30, 42, 55, 68, 80, 92].map(h => `<div class="w-2.5 sm:w-4 bg-green-600 rounded-t-full shadow-inner border-r border-green-700" style="height: ${h}%"></div>`).join('')}
+                    </div>`
+            },
+            {
+                id: 'faceaface', name: 'Face à face',
+                defis: [{ id: 'f1', text: 'Utiliser que les prises vertes', points: 5 }, { id: 'f2', text: 'Utiliser que les prises violettes', points: 10 }, { id: 'f3', text: 'Grimper en miroir (en binôme)', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-white/40 backdrop-blur-sm w-full h-full border-4 border-blue-200 relative overflow-hidden">
+                        <div class="absolute top-3 left-4 w-3 h-3 bg-green-400 rounded-full shadow"></div>
+                        <div class="absolute top-8 right-6 w-3.5 h-3.5 bg-purple-500 rounded-full shadow"></div>
+                        <div class="absolute top-1/3 left-8 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 right-10 w-3 h-3 bg-green-400 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 left-5 w-4 h-4 bg-purple-500 rounded-full shadow"></div>
+                        <div class="absolute bottom-6 left-10 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div>
+                        <div class="absolute bottom-4 right-5 w-3 h-3 bg-green-400 rounded-full shadow"></div>
+                        <div class="absolute top-1/4 left-1/2 w-3 h-3 bg-yellow-400 rounded-full shadow"></div>
+                    </div>`
+            },
+            {
+                id: 'zigzag', name: 'Zig Zag',
+                defis: [{ id: 'z1', text: 'Utiliser que les barres rouges', points: 5 }, { id: 'z2', text: 'Utiliser que les pinces jaunes', points: 10 }, { id: 'z3', text: 'Ne pas utiliser les trous sur le côté', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-green-700 w-full h-full flex flex-col justify-evenly px-4">
+                        <div class="h-3 bg-red-600 transform -skew-y-12 shadow-sm"></div>
+                        <div class="h-3 bg-yellow-400 transform skew-y-12 shadow-sm"></div>
+                        <div class="h-3 bg-red-600 transform -skew-y-12 shadow-sm"></div>
+                    </div>`
+            },
+            {
+                id: 'nuages', name: 'Les nuages',
+                defis: [{ id: 'n1', text: 'Utiliser que 4 prises roses', points: 5 }, { id: 'n2', text: 'Utiliser que 3 prises roses', points: 10 }, { id: 'n3', text: 'Utiliser que 2 prises roses', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-[#8b5a2b] w-full h-full flex flex-col items-center justify-around py-3">
+                        <div class="w-16 h-6 bg-gray-200 rounded-full shadow-md relative"><div class="absolute -top-2 left-3 w-8 h-6 bg-gray-200 rounded-full"></div><div class="absolute -top-3 right-3 w-7 h-7 bg-gray-200 rounded-full"></div></div>
+                        <div class="w-20 h-7 bg-gray-200 rounded-full shadow-md relative flex items-center justify-center"><div class="absolute -top-3 left-4 w-9 h-7 bg-gray-200 rounded-full"></div><div class="absolute -top-3 right-4 w-8 h-8 bg-gray-200 rounded-full"></div><div class="w-2 h-2 rounded-full bg-pink-500 z-10"></div></div>
+                        <div class="w-14 h-5 bg-gray-200 rounded-full shadow-md relative"><div class="absolute -top-2 left-2 w-6 h-5 bg-gray-200 rounded-full"></div></div>
+                    </div>`
+            },
+            {
+                id: 'fissure', name: 'La fissure',
+                defis: [{ id: 'fi1', text: 'Fissure pour mains, prises pour pieds', points: 5 }, { id: 'fi2', text: 'Prises pour mains, fissure pour pieds', points: 10 }, { id: 'fi3', text: 'Utiliser que la fissure', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-[#e5d3b3] w-full h-full border-x-8 border-blue-500 relative">
+                        <svg viewBox="0 0 100 100" class="w-full h-full" fill="none" stroke="#2563eb" stroke-width="6" stroke-linejoin="miter"><path d="M 40 0 L 20 45 L 60 45 L 30 100" /></svg>
+                        <div class="absolute top-6 left-2 w-2.5 h-2.5 bg-red-500 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 left-2 w-2.5 h-2.5 bg-yellow-400 rounded-full shadow"></div>
+                        <div class="absolute top-10 right-2 w-2.5 h-2.5 bg-green-500 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 right-2 w-2.5 h-2.5 bg-purple-500 rounded-full shadow"></div>
+                        <div class="absolute bottom-6 right-2 w-2.5 h-2.5 bg-blue-400 rounded-full shadow"></div>
+                    </div>`
+            },
+            {
+                id: 'haricot', name: 'Le haricot magique',
+                defis: [{ id: 'h1', text: 'Ne pas utiliser les 4 feuilles détachées', points: 5 }, { id: 'h2', text: 'Utiliser que les prises jaunes', points: 10 }, { id: 'h3', text: 'Utiliser que la tige', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-blue-900 w-full h-full flex items-center justify-center">
+                        <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md" fill="none" stroke="#84cc16" stroke-width="12" stroke-linecap="round"><path d="M 50 90 Q 20 60 60 40 T 40 10" /></svg>
+                    </div>`
+            },
+            {
+                id: 'labyrinthe', name: 'Le labyrinthe',
+                defis: [{ id: 'l1', text: 'Utiliser que les parties gauche et droites', points: 5 }, { id: 'l2', text: 'Toucher les 7 miroirs', points: 10 }, { id: 'l3', text: 'Les yeux bandés, toucher les 7 miroirs', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-green-600 w-full h-full border-x-8 border-yellow-400 p-2 flex flex-col justify-around">
+                        <div class="w-full h-2 bg-red-600 rounded"></div>
+                        <div class="w-2/3 h-2 bg-red-600 rounded self-end"></div>
+                        <div class="w-3/4 h-2 bg-red-600 rounded"></div>
+                        <div class="w-1/2 h-2 bg-red-600 rounded self-center"></div>
+                        <div class="w-4/5 h-2 bg-red-600 rounded self-end"></div>
+                    </div>`
+            },
+            {
+                id: 'tangrams', name: 'Les tangrams',
+                defis: [{ id: 'ta1', text: 'Tangrams pour mains, vertes pieds', points: 5 }, { id: 'ta2', text: 'Utiliser que les tangrams', points: 10 }, { id: 'ta3', text: 'Utiliser que les prises vertes', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-[#a16207] w-full h-full p-2 flex flex-col justify-around items-center border-x-8 border-yellow-500">
+                        <div class="w-6 h-6 bg-amber-800 transform rotate-12 rounded-sm shadow"></div>
+                        <div class="w-8 h-4 bg-amber-900 transform -rotate-45 rounded-sm shadow"></div>
+                        <div class="w-7 h-7 bg-amber-700 transform rotate-45 rounded-sm shadow"></div>
+                        <div class="w-6 h-5 bg-amber-900 transform rotate-6 rounded-sm shadow"></div>
+                    </div>`
+            },
+            {
+                id: 'chrono_gauche', name: 'Le chrono (G)',
+                defis: [{ id: 'cg1', text: 'Moins de 90 secondes', points: 5 }, { id: 'cg2', text: 'Moins de 60 secondes', points: 10 }, { id: 'cg3', text: 'Moins de 30 secondes', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-red-600 w-full h-full border-x-8 border-blue-500 relative flex flex-col items-center justify-end pb-3">
+                        <div class="absolute top-3 left-4 w-3 h-3 bg-green-400 rounded-full shadow"></div>
+                        <div class="absolute top-10 right-6 w-3.5 h-3.5 bg-blue-300 rounded-full shadow"></div>
+                        <div class="absolute top-1/3 left-6 w-3.5 h-3.5 bg-green-500 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 right-5 w-3 h-3 bg-blue-400 rounded-full shadow"></div>
+                        <div class="bg-black text-red-500 font-mono text-[10px] px-2 py-0.5 rounded border border-gray-700 shadow-md">00.00</div>
+                    </div>`
+            },
+            {
+                id: 'chrono_droit', name: 'Le chrono (D)',
+                defis: [{ id: 'cd1', text: 'Moins de 90 secondes', points: 5 }, { id: 'cd2', text: 'Moins de 60 secondes', points: 10 }, { id: 'cd3', text: 'Moins de 30 secondes', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-red-600 w-full h-full border-x-8 border-blue-500 relative flex flex-col items-center justify-end pb-3">
+                        <div class="absolute top-4 right-4 w-3 h-3 bg-yellow-400 rounded-full shadow"></div>
+                        <div class="absolute top-12 left-5 w-3.5 h-3.5 bg-purple-500 rounded-full shadow"></div>
+                        <div class="absolute top-1/3 right-6 w-3.5 h-3.5 bg-red-400 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 left-6 w-3 h-3 bg-yellow-300 rounded-full shadow"></div>
+                        <div class="bg-black text-red-500 font-mono text-[10px] px-2 py-0.5 rounded border border-gray-700 shadow-md">00.00</div>
+                    </div>`
+            },
+            {
+                id: 'diedre', name: 'Le dièdre',
+                defis: [{ id: 'd1', text: 'Utiliser que les prises vertes', points: 5 }, { id: 'd2', text: 'Utiliser que les prises bleues', points: 10 }, { id: 'd3', text: 'Ne pas utiliser de prises (mains)', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-gradient-to-r from-blue-600 via-blue-900 to-blue-600 w-full h-full relative flex justify-center">
+                        <div class="w-0.5 h-full bg-black/60"></div>
+                        <div class="absolute top-4 left-3 w-3 h-3 bg-green-400 rounded-full shadow"></div>
+                        <div class="absolute top-12 right-4 w-3 h-3 bg-blue-400 rounded-full shadow"></div>
+                        <div class="absolute top-1/2 left-5 w-3.5 h-3.5 bg-green-500 rounded-full shadow"></div>
+                        <div class="absolute bottom-6 right-5 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div>
+                    </div>`
+            },
+            {
+                id: 'dinosaures', name: 'Les dinosaures',
+                defis: [{ id: 'di1', text: 'Utiliser que jaunes et vertes', points: 5 }, { id: 'di2', text: 'Utiliser que oranges et violettes', points: 10 }, { id: 'di3', text: 'Utiliser que bleues', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-white w-full h-full border-x-8 border-blue-500 flex flex-col items-center justify-around py-2">
+                        <span class="text-xs font-bold text-green-600">🦖 Dino</span>
+                        <span class="text-xs font-bold text-purple-600">🦕 Dino</span>
+                        <span class="text-xs font-bold text-yellow-500">🦖 Dino</span>
+                    </div>`
+            },
+            {
+                id: 'tuyaux', name: 'Les tuyaux',
+                defis: [{ id: 'tu1', text: 'Utiliser que les tuyaux verts', points: 5 }, { id: 'tu2', text: 'Utiliser que les tuyaux bleus', points: 10 }, { id: 'tu3', text: 'Lumières vertes et oranges', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-white w-full h-full border-x-8 border-teal-600 relative overflow-hidden">
+                        <div class="absolute top-3 left-4 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)]"></div>
+                        <div class="absolute top-8 right-5 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.9)]"></div>
+                        <div class="absolute top-1/3 left-6 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]"></div>
+                        <div class="absolute top-1/2 right-7 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)]"></div>
+                        <div class="absolute bottom-6 left-5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]"></div>
+                        <div class="absolute bottom-3 right-4 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]"></div>
+                    </div>`
+            },
+            {
+                id: 'gratteciel', name: 'Le gratte-ciel',
+                defis: [{ id: 'g1', text: 'Utiliser que les fenêtres jaunes', points: 5 }, { id: 'g2', text: 'Utiliser que les fenêtres rouges', points: 10 }, { id: 'g3', text: 'Utiliser que les fenêtres bleues', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-black w-full h-full p-2 grid grid-cols-3 gap-1">
+                        ${Array.from({ length: 15 }).map((_, i) => `<div class="w-full h-full rounded-xs ${i % 4 === 0 ? 'bg-yellow-400' : i % 7 === 0 ? 'bg-red-600' : i % 5 === 0 ? 'bg-blue-600' : 'bg-gray-900'}"></div>`).join('')}
+                    </div>`
+            },
+            {
+                id: 'planetes', name: 'Les planètes',
+                defis: [{ id: 'p1', text: 'Utiliser que les barres en bois', points: 5 }, { id: 'p2', text: 'Utiliser que les planètes', points: 10 }, { id: 'p3', text: 'Utiliser que les petites planètes', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-gray-950 w-full h-full border-x-4 border-pink-500 relative flex items-center justify-center">
+                        <div class="absolute top-3 left-2 w-8 h-8 rounded-full bg-amber-200/80 shadow-inner"></div>
+                        <div class="absolute top-12 right-3 w-6 h-6 rounded-full bg-amber-100/70 shadow-inner"></div>
+                        <div class="absolute bottom-4 left-5 w-9 h-9 rounded-full bg-amber-300/90 shadow-inner"></div>
+                    </div>`
+            },
+            {
+                id: 'engrenage', name: "L'engrenage",
+                defis: [{ id: 'e1', text: 'Utiliser que les prises oranges', points: 5 }, { id: 'e2', text: 'Utiliser que les prises jaunes', points: 10 }, { id: 'e3', text: 'Oranges (pieds), jaunes (mains)', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-green-500 w-full h-full border-x-8 border-purple-700 flex flex-col items-center justify-around py-1">
+                        <div class="w-12 h-12 rounded-full bg-yellow-400 border-2 border-orange-500 shadow"></div>
+                        <div class="w-12 h-12 rounded-full bg-orange-500 border-2 border-purple-800 shadow"></div>
+                    </div>`
+            },
+            {
+                id: 'rondin', name: 'Le rondin de la jungle',
+                defis: [{ id: 'rj1', text: 'Mains: que les cordes du filet', points: 5 }, { id: 'rj2', text: 'Utiliser que les prises du rondin', points: 10 }, { id: 'rj3', text: 'Ne pas utiliser les mains sur le rondin', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-emerald-800 w-full h-full border-x-4 border-emerald-900 flex justify-center items-center">
+                        <div class="w-4 h-full bg-amber-800 rounded shadow-md border border-amber-950"></div>
+                    </div>`
+            },
+            {
+                id: 'echelle', name: "L'échelle de la jungle",
+                defis: [{ id: 'ej1', text: 'Mains: cordes verticales échelle', points: 5 }, { id: 'ej2', text: 'Cordes verticales (filet et échelle) mains', points: 10 }, { id: 'ej3', text: 'Ne pas utiliser les doigts pour grimper', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-emerald-800 w-full h-full border-x-4 border-emerald-900 flex flex-col justify-evenly items-center p-2">
+                        <div class="w-8 h-full border-x-2 border-amber-900 flex flex-col justify-around">
+                            <div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div>
+                        </div>
+                    </div>`
+            },
+            {
+                id: 'tornade', name: 'La tornade',
+                defis: [{ id: 't1', text: 'Utiliser que les fentes', points: 5 }, { id: 't2', text: 'Utiliser que les fentes inversées', points: 10 }, { id: 't3', text: 'Ne pas utiliser les fentes', points: 20 }],
+                preview: `
+                    <div class="absolute inset-0 bg-slate-900 w-full h-full flex flex-col justify-between py-1 px-3">
+                        <div class="w-full h-2 bg-red-500 transform -rotate-3"></div>
+                        <div class="w-full h-2 bg-yellow-400 transform rotate-3"></div>
+                        <div class="w-full h-2 bg-green-500 transform -rotate-2"></div>
+                        <div class="w-full h-2 bg-blue-500 transform rotate-2"></div>
+                        <div class="w-full h-2 bg-teal-400 transform -rotate-3"></div>
+                        <div class="w-full h-2 bg-purple-600 transform rotate-3"></div>
+                        <div class="w-full h-2 bg-pink-500 transform -rotate-2"></div>
+                    </div>`
+            }
+        ];
+
+        // --- GROUPES DE DIFFICULTÉ ---
+        const DIFF_GROUPES = {
+            'facile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade'],
+            'moyen': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin'],
+            'difficile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin', 'haricot', 'chrono_gauche', 'diedre', 'tuyaux', 'planetes', 'engrenage', 'chrono_droit']
+        };
+
+        // --- ÉTATS ---
+        let pseudo = '';
+        let isLogged = false;
+        let currentTab = 'carte'; 
+        let leaderboardTab = 'jour';
+        let selectedAtelierId = null;
+        let completedDefis = {};
+        
+        let climbyLevel = null; 
+        let climbyInputs = {}; 
+        let climbySubmitted = false;
+        let climbyStatus = {};
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const input = document.getElementById('pseudoInput');
+            if (input.value.trim()) {
+                pseudo = input.value.trim();
+                isLogged = true;
+                render();
+            }
+        }
+
+        function calculateScore() {
+            let total = 0;
+            ATELIERS.forEach(atelier => {
+                atelier.defis.forEach(defi => {
+                    if (completedDefis[defi.id]) total += defi.points;
+                });
+            });
+            return total;
+        }
+
+        function toggleDefi(defiId) {
+            completedDefis[defiId] = !completedDefis[defiId];
+            render();
+        }
+
+        function openModal(id) {
+            selectedAtelierId = id;
+            render();
+        }
+
+        function closeModal() {
+            selectedAtelierId = null;
+            render();
+        }
+
+        function changeTab(tab) {
+            currentTab = tab;
+            if (tab === 'defi_mois') {
+                climbyLevel = null; 
+                climbyInputs = {};
+                climbyStatus = {};
+                climbySubmitted = false;
+            }
+            render();
+        }
+
+        function changeLeaderboardTab(tab) {
+            leaderboardTab = tab;
+            render();
+        }
+
+        function selectClimbyLevel(lvl) {
+            climbyLevel = lvl;
+            climbyInputs = {};
+            climbyStatus = {};
+            climbySubmitted = false;
+            render();
+        }
+
+        function handleClimbyInput(atelierId, val) {
+            climbyInputs[atelierId] = val;
+            if (climbyStatus[atelierId]) {
+                delete climbyStatus[atelierId];
+            }
+            const btn = document.getElementById('verifyBtn');
+            if (btn) {
+                if (areAllFilled()) {
+                    btn.disabled = false;
+                    btn.className = "px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 bg-purple-600 text-white shadow-purple-900/30 hover:bg-purple-500 cursor-pointer active:scale-95";
+                } else {
+                    btn.disabled = true;
+                    btn.className = "px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 bg-gray-200 text-gray-400 cursor-not-allowed opacity-60";
+                }
+            }
+        }
+
+        function getActiveAteliersForLevel() {
+            if (!climbyLevel) return [];
+            const ids = DIFF_GROUPES[climbyLevel];
+            return ATELIERS.filter(a => ids.includes(a.id));
+        }
+
+        function areAllFilled() {
+            const currentAteliers = getActiveAteliersForLevel();
+            if (currentAteliers.length === 0) return false;
+            return currentAteliers.every(atelier => {
+                const val = climbyInputs[atelier.id];
+                return val !== undefined && val !== '' && val !== null && String(val).trim() !== '';
+            });
+        }
+
+        function verifyClimbyAnswers() {
+            const currentAteliers = getActiveAteliersForLevel();
+            let allCorrect = true;
+            climbyStatus = {};
+
+            currentAteliers.forEach(atelier => {
+                const userVal = Number(climbyInputs[atelier.id]);
+                const correctVal = Number(REPONSES_CLIMBY[atelier.id]);
+                if (userVal === correctVal) {
+                    climbyStatus[atelier.id] = 'correct';
+                } else {
+                    climbyStatus[atelier.id] = 'error';
+                    allCorrect = false;
+                }
+            });
+
+            climbySubmitted = true;
+            render();
+        }
+
+        function isClimbyCompleted() {
+            if (!climbyLevel || !climbySubmitted) return false;
+            const currentAteliers = getActiveAteliersForLevel();
+            return currentAteliers.every(atelier => {
+                return Number(climbyInputs[atelier.id]) === Number(REPONSES_CLIMBY[atelier.id]);
+            });
+        }
+
+        // --- RENDU ---
+        function render() {
+            const app = document.getElementById('app');
+            const isClimbyTab = (currentTab === 'defi_mois');
+
+            if (!isLogged) {
+                app.innerHTML = `
+                    <div class="min-h-screen bg-gradient-to-br from-purple-600 to-teal-400 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl text-center">
+                            <div class="w-24 h-24 bg-gradient-to-br from-purple-500 to-teal-400 rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg">
+                                <i data-lucide="trophy" class="text-white w-12 h-12"></i>
+                            </div>
+                            <h1 class="text-3xl font-black text-gray-800 mb-2">Climb Up</h1>
+                            <p class="text-gray-500 mb-8 font-medium">Fun Climbing - Défis</p>
+                            
+                            <form onsubmit="handleLogin(event)" class="space-y-4">
+                                <div>
+                                    <input type="text" id="pseudoInput" placeholder="Choisis ton pseudo..." class="w-full px-4 py-4 rounded-xl bg-gray-50 border-2 border-gray-100 focus:border-purple-500 focus:ring-0 transition-colors text-lg text-center font-bold text-gray-700 outline-none" required />
+                                </div>
+                                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95 text-lg">
+                                    C'est parti !
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const totalScore = calculateScore();
+
+                let html = `
+                    <div class="min-h-screen bg-gray-50 text-gray-800 pb-24 md:pb-8">
+                        <header class="bg-white shadow-sm sticky top-0 z-10 px-4 py-3 flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 bg-gradient-to-br from-purple-600 to-teal-500 rounded-full flex items-center justify-center text-white font-bold">
+                                    <i data-lucide="mountain" class="w-4 h-4"></i>
+                                </div>
+                                <span class="font-black text-xl bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-teal-500">Climb Up</span>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="text-right hidden md:block">
+                                    <p class="text-xs text-gray-500 font-bold uppercase">${pseudo}</p>
+                                </div>
+                                <div class="bg-purple-100 border border-purple-200 text-purple-700 px-4 py-2 rounded-full shadow-sm flex items-center gap-2">
+                                    <span class="font-black text-lg">${totalScore}</span>
+                                    <span class="text-xs font-bold uppercase">pts</span>
+                                </div>
+                            </div>
+                        </header>
+                        
+                        <div class="hidden md:flex justify-center gap-4 p-6">
+                            <button onclick="changeTab('carte')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'carte' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
+                                <i data-lucide="map"></i> La Carte
+                            </button>
+                            <button onclick="changeTab('defi_mois')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'bg-white text-purple-600 border border-purple-200 shadow'}">
+                                <i data-lucide="sparkles"></i> Le Défi de Climby 🏔️
+                            </button>
+                            <button onclick="changeTab('classement')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'classement' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
+                                <i data-lucide="medal"></i> Classement
+                            </button>
+                        </div>
+                        
+                        <main class="max-w-6xl mx-auto md:px-6">
+                `;
+
+                if (currentTab === 'carte') {
+                    html += `<div class="grid grid-cols-2 gap-3 sm:gap-4 p-4 md:grid-cols-4 lg:grid-cols-5">`;
+                    ATELIERS.forEach(atelier => {
+                        const totalDefis = atelier.defis.length;
+                        const completed = atelier.defis.filter(d => completedDefis[d.id]).length;
+                        const isAllCompleted = completed === totalDefis;
+                        
+                        html += `
+                            <button onclick="openModal('${atelier.id}')" class="relative overflow-hidden rounded-3xl aspect-square shadow-md transform transition-transform active:scale-95 ${isAllCompleted ? 'ring-4 ring-teal-400 ring-offset-2' : ''}">
+                                ${atelier.preview}
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent flex flex-col justify-end p-3 sm:p-4">
+                                    <h3 class="text-white font-bold text-sm sm:text-base mb-2 drop-shadow-md text-left leading-tight">${atelier.name}</h3>
+                                    <div class="flex gap-1">
+                                        ${atelier.defis.map(d => `<div class="h-1.5 flex-1 rounded-full transition-colors ${completedDefis[d.id] ? 'bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)]' : 'bg-white/30 backdrop-blur-sm'}"></div>`).join('')}
+                                    </div>
+                                </div>
+                                ${isAllCompleted ? `<div class="absolute top-2 right-2 bg-teal-400 text-white p-1 rounded-full shadow-lg"><i data-lucide="check" class="w-4 h-4 text-white"></i></div>` : ''}
+                            </button>
+                        `;
+                    });
+                    html += `</div>`;
+                } 
+                else if (currentTab === 'defi_mois') {
+                    if (!climbyLevel) {
+                        html += `
+                            <div class="p-6 flex flex-col items-center justify-center text-center py-12">
+                                <div class="w-24 h-24 bg-purple-100 border-2 border-purple-200 rounded-full flex items-center justify-center mb-4 shadow-inner overflow-hidden climby-bounce">
+                                    <svg viewBox="0 0 100 100" class="w-16 h-16 text-purple-600 fill-current"><circle cx="50" cy="40" r="20"/><path d="M 20 85 Q 50 60 80 85 Z"/></svg>
+                                </div>
+                                <h2 class="text-3xl font-black text-gray-800 mb-2">Le Défi de Climby 🏔️</h2>
+                                <p class="text-gray-500 text-sm mb-8 max-w-md">Climby le Yéti t'invite à retrouver les nombres cachés dans la salle ! Choisis ton niveau de difficulté :</p>
+                                <div class="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                                    <button onclick="selectClimbyLevel('facile')" class="flex-1 bg-white border-2 border-emerald-500 hover:bg-emerald-50 text-emerald-600 font-black py-5 rounded-2xl shadow-md transition active:scale-95 text-lg flex items-center justify-center gap-2">
+                                        🟢 Facile
+                                    </button>
+                                    <button onclick="selectClimbyLevel('moyen')" class="flex-1 bg-white border-2 border-amber-500 hover:bg-amber-50 text-amber-600 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">
+                                        🟠 Moyen
+                                    </button>
+                                    <button onclick="selectClimbyLevel('difficile')" class="flex-1 bg-white border-2 border-red-500 hover:bg-red-50 text-red-600 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">
+                                        🔴 Difficile
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else if (isClimbyCompleted()) {
+                        html += `
+                            <div class="p-6 flex flex-col items-center justify-center text-center py-16">
+                                <div class="w-32 h-32 bg-purple-600 text-white rounded-full flex items-center justify-center shadow-xl mb-6 animate-bounce">
+                                    <i data-lucide="award" class="w-16 h-16"></i>
+                                </div>
+                                <h1 class="text-4xl font-black text-purple-700 mb-4">🏆 BRAVO AVEC CLIMBY (${climbyLevel.toUpperCase()}) ! 🎉</h1>
+                                <p class="text-gray-600 text-lg max-w-xl mb-8">
+                                    Félicitations <span class="font-bold text-purple-600">${pseudo}</span> ! Tu as résolu tous les ateliers du niveau ${climbyLevel} avec succès !
+                                </p>
+                                <div class="bg-white border-2 border-purple-200 p-6 rounded-3xl shadow-xl max-w-md w-full mb-8">
+                                    <p class="text-purple-700 font-bold mb-2">✨ Écran à présenter à l'accueil :</p>
+                                    <div class="bg-gray-900 text-teal-400 p-4 rounded-xl font-mono text-xl font-black tracking-wider shadow-inner">
+                                        [ VALIDÉ - CLIMBY ${climbyLevel.toUpperCase()} ]
+                                    </div>
+                                </div>
+                                <button onclick="climbyLevel = null; render();" class="text-sm text-purple-600 underline hover:text-purple-800 font-bold">Changer de niveau ou recommencer</button>
+                            </div>
+                        `;
+                    } else {
+                        const currentAteliers = getActiveAteliersForLevel();
+                        const filled = areAllFilled();
+
+                        html += `
+                            <div class="p-4">
+                                <div class="flex justify-between items-center mb-6">
+                                    <button onclick="climbyLevel = null; render();" class="text-xs bg-white text-purple-600 px-3 py-2 rounded-xl font-bold border border-purple-200 hover:bg-purple-50 transition shadow-sm">← Changer de difficulté (${climbyLevel})</button>
+                                </div>
+                                <div class="bg-gradient-to-r from-purple-600 to-teal-500 text-white rounded-3xl p-6 mb-6 text-center shadow-lg flex flex-col md:flex-row items-center justify-center gap-4">
+                                    <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <i data-lucide="mountain" class="w-8 h-8 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-2xl font-black mb-1">🏔️ Le Défi de Climby (${climbyLevel})</h2>
+                                        <p class="text-white/90 text-sm">Remplis tous les nombres des ateliers de ce niveau pour valider ton ascension avec le yéti !</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+                        `;
+
+                        currentAteliers.forEach(atelier => {
+                            const val = climbyInputs[atelier.id] !== undefined ? climbyInputs[atelier.id] : '';
+                            const status = climbyStatus[atelier.id];
+                            let borderClass = 'border-gray-200 bg-white';
+                            let shakeClass = '';
+
+                            if (status === 'correct') {
+                                borderClass = 'border-teal-500 bg-teal-50';
+                            } else if (status === 'error') {
+                                borderClass = 'border-red-500 bg-red-50';
+                                shakeClass = 'shake-error';
+                            }
+
+                            html += `
+                                <div class="border ${borderClass} rounded-2xl p-4 flex flex-col justify-between shadow-sm ${shakeClass}">
+                                    <div>
+                                        <div class="h-24 rounded-xl overflow-hidden relative mb-3">
+                                            ${atelier.preview}
+                                            <div class="absolute inset-0 bg-black/20"></div>
+                                        </div>
+                                        <h3 class="text-gray-800 font-bold text-sm mb-3">${atelier.name}</h3>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" placeholder="Nombre..." value="${val}" oninput="handleClimbyInput('${atelier.id}', this.value)" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-800 font-bold text-center text-sm outline-none focus:border-purple-500" />
+                                        ${status === 'correct' ? '<span class="text-teal-600 font-bold text-lg">✓</span>' : status === 'error' ? '<span class="text-red-500 font-bold text-lg">✗</span>' : ''}
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        html += `
+                                </div>
+                                <div class="flex justify-center pb-8">
+                                    <button id="verifyBtn" onclick="verifyClimbyAnswers()" ${!filled ? 'disabled' : ''} class="px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 ${filled ? 'bg-purple-600 text-white shadow-purple-900/30 hover:bg-purple-500 cursor-pointer active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'}">
+                                        <i data-lucide="check-circle" class="w-6 h-6"></i> Vérifier mes réponses
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } 
+                else {
+                    const dummyJour = [
+                        { rank: 1, pseudo: "SpiderMan", score: 145 }, { rank: 2, pseudo: "ClimbPro99", score: 120 }, { rank: 3, pseudo: pseudo, score: totalScore, isCurrent: true },
+                        { rank: 4, pseudo: "NinjaWarrior", score: 95 }, { rank: 5, pseudo: "Rookie", score: 40 }
+                    ].sort((a,b) => b.score - a.score).map((p, i) => ({...p, rank: i+1}));
+
+                    const dummySemaine = [
+                        { rank: 1, pseudo: "ProClimber", score: 450 }, { rank: 2, pseudo: "AlexHonnold", score: 435 }, { rank: 3, pseudo: "SpiderMan", score: 380 },
+                        { rank: 4, pseudo: "NinjaWarrior", score: 310 }, { rank: 5, pseudo: pseudo, score: totalScore, isCurrent: true }
+                    ].sort((a,b) => b.score - a.score).map((p, i) => ({...p, rank: i+1}));
+
+                    const buildTable = (data, title, subtitle, bgColor) => `
+                        <div class="flex-1 bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100">
+                            <div class="${bgColor} p-6 text-white text-center">
+                                <h2 class="text-2xl font-black mb-1">${title}</h2>
+                                <p class="text-white/80 text-sm opacity-80">${subtitle}</p>
+                            </div>
+                            <div class="divide-y divide-gray-50">
+                                ${data.map(p => `
+                                    <div class="flex items-center p-4 ${p.isCurrent ? 'bg-purple-50' : 'hover:bg-gray-50'}">
+                                        <div class="w-8 font-black text-lg ${p.rank === 1 ? 'text-yellow-500' : p.rank === 2 ? 'text-gray-400' : p.rank === 3 ? 'text-orange-500' : 'text-gray-300'}">#${p.rank}</div>
+                                        <div class="flex-1 font-bold ${p.isCurrent ? 'text-purple-700' : 'text-gray-700'}">
+                                            ${p.pseudo} ${p.isCurrent ? `<span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>` : ''}
+                                        </div>
+                                        <div class="font-black ${bgColor.includes('purple') ? 'text-purple-600 bg-purple-100' : 'text-teal-600 bg-teal-100'} px-3 py-1 rounded-full text-sm">${p.score} pts</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+
+                    html += `
+                        <div class="p-4 flex flex-col md:flex-row gap-6">
+                            <div class="flex bg-gray-200 rounded-xl p-1 md:hidden mb-4">
+                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Aujourd'hui</button>
+                                <button onclick="changeLeaderboardTab('semaine')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'semaine' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Cette Semaine</button>
+                            </div>
+                            <div class="${leaderboardTab !== 'jour' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(dummyJour, "Top du Jour", "Reset à minuit", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
+                            <div class="${leaderboardTab !== 'semaine' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(dummySemaine, "Top de la Semaine", "Reset dimanche à minuit", "bg-gradient-to-r from-teal-500 to-teal-400")}</div>
+                        </div>
+                    `;
+                }
+
+                html += `</main>`;
+
+                html += `
+                    <nav class="md:hidden fixed bottom-0 w-full bg-white border-t border-gray-100 flex pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20">
+                        <button onclick="changeTab('carte')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'carte' ? 'text-purple-600 font-bold' : 'text-gray-400'}">
+                            <i data-lucide="map" class="w-6 h-6"></i>
+                            <span class="text-[10px] uppercase tracking-wider">Carte</span>
+                        </button>
+                        <button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'defi_mois' ? 'text-purple-600 font-bold' : 'text-gray-400'}">
+                            <i data-lucide="sparkles" class="w-6 h-6"></i>
+                            <span class="text-[10px] uppercase tracking-wider">Climby</span>
+                        </button>
+                        <button onclick="changeTab('classement')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'classement' ? 'text-purple-600 font-bold' : 'text-gray-400'}">
+                            <i data-lucide="medal" class="w-6 h-6"></i>
+                            <span class="text-[10px] uppercase tracking-wider">Classement</span>
+                        </button>
+                    </nav>
+                `;
+
+                if (selectedAtelierId) {
+                    const atelier = ATELIERS.find(a => a.id === selectedAtelierId);
+                    const atelierScore = atelier.defis.reduce((acc, curr) => acc + (completedDefis[curr.id] ? curr.points : 0), 0);
+                    const maxScore = atelier.defis.reduce((acc, curr) => acc + curr.points, 0);
+
+                    html += `
+                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col justify-end md:justify-center md:items-center">
+                            <div class="bg-gray-50 text-gray-800 w-full md:w-[450px] md:rounded-3xl rounded-t-3xl min-h-[60vh] md:min-h-0 flex flex-col overflow-hidden shadow-2xl modal-animate">
+                                <div class="relative h-40 w-full">
+                                    ${atelier.preview}
+                                    <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
+                                    <button onclick="closeModal()" class="absolute top-4 right-4 bg-black/40 backdrop-blur-md text-white p-2 rounded-full hover:bg-black/60 transition">
+                                        <i data-lucide="x" class="w-5 h-5"></i>
+                                    </button>
+                                    <h2 class="absolute bottom-4 left-6 text-white text-3xl font-black drop-shadow-md">${atelier.name}</h2>
+                                </div>
+                                
+                                <div class="p-6 space-y-3 flex-1 overflow-y-auto max-h-[50vh]">
+                                    <p class="text-gray-500 font-medium mb-4">Coche les défis que tu as validés pour gagner des points !</p>
+                                    ${atelier.defis.map(defi => {
+                                        const isDone = completedDefis[defi.id];
+                                        return `
+                                            <button onclick="toggleDefi('${defi.id}')" class="w-full flex items-center p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${isDone ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50'}">
+                                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isDone ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 bg-gray-50'}">
+                                                    ${isDone ? `<i data-lucide="check" class="w-3.5 h-3.5"></i>` : ''}
+                                                </div>
+                                                <div class="flex-1"><p class="font-bold leading-tight ${isDone ? 'text-teal-900' : 'text-gray-700'}">${defi.text}</p></div>
+                                                <div class="font-black text-lg ml-3 ${isDone ? 'text-teal-600' : 'text-purple-600'}">+${defi.points}</div>
+                                            </button>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                
+                                <div class="p-4 bg-white border-t border-gray-100 flex justify-between items-center pb-safe">
+                                    <div class="text-gray-500 font-bold">Total sur cet atelier</div>
+                                    <div class="text-2xl font-black text-purple-600">${atelierScore} <span class="text-sm text-gray-400 font-bold ml-1">/ ${maxScore}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+                app.innerHTML = html;
+            }
+
+            lucide.createIcons();
+        }
+
+        render();
+    </script>
+</body>
+</html>
