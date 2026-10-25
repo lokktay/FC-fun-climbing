@@ -38,10 +38,11 @@
 
     <div id="app"></div>
 
-    <!-- Firebase SDK (Module) -->
+    <!-- Firebase SDK & Database Configuration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCAzdG02k6xz_cjZlO7mHvgE4Qtm48ZJZs",
@@ -55,7 +56,54 @@
 
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
-        window.firebaseApp = app;
+        const db = getFirestore(app);
+
+        // Fonctions globales exposées pour interagir avec Firestore basées sur l'ID de l'appareil (device_id)
+        window.saveUserDataToFirebase = async (deviceId, pseudo, completedDefis, totalScore) => {
+            try {
+                await setDoc(doc(db, "users", deviceId), {
+                    deviceId: deviceId,
+                    pseudo: pseudo,
+                    completedDefis: completedDefis,
+                    score: totalScore,
+                    lastUpdate: new Date().toISOString()
+                }, { merge: true });
+            } catch (e) {
+                console.error("Erreur lors de la sauvegarde Firebase :", e);
+            }
+        };
+
+        window.loadUserDataFromFirebase = async (deviceId) => {
+            try {
+                const docRef = doc(db, "users", deviceId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    return docSnap.data();
+                }
+            } catch (e) {
+                console.error("Erreur lors du chargement Firebase :", e);
+            }
+            return null;
+        };
+
+        window.getGlobalLeaderboardFromFirebase = async () => {
+            try {
+                const querySnapshot = await getDocs(collection(db, "users"));
+                let users = [];
+                querySnapshot.forEach((doc) => {
+                    users.push(doc.data());
+                });
+                // Tri du score le plus haut au plus bas
+                users.sort((a, b) => b.score - a.score);
+                return users;
+            } catch (e) {
+                console.error("Erreur chargement classement :", e);
+                return [];
+            }
+        };
+
+        // Lancement de la synchro au démarrage
+        window.initFirebaseSync();
     </script>
 
     <script>
@@ -297,32 +345,60 @@
             'difficile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin', 'haricot', 'chrono_gauche', 'diedre', 'tuyaux', 'planetes', 'engrenage', 'chrono_droit']
         };
 
-        // --- ÉTATS (CHARGEMENT DEPUIS LOCALSTORAGE) ---
+        // --- ÉTATS & GESTION DE L'ID D'APPAREIL INDÉPENDANT DU PSEUDO ---
+        let deviceId = localStorage.getItem('climb_device_id');
+        if (!deviceId) {
+            deviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            localStorage.setItem('climb_device_id', deviceId);
+        }
+
         let pseudo = localStorage.getItem('climb_pseudo') || '';
         let isLogged = localStorage.getItem('climb_isLogged') === 'true';
         let currentTab = 'carte'; 
         let leaderboardTab = 'jour';
         let selectedAtelierId = null;
-        let completedDefis = JSON.parse(localStorage.getItem('climb_completedDefis') || '{}');
+        let completedDefis = {};
+        let globalLeaderboardData = [];
         
         let climbyLevel = null; 
         let climbyInputs = {}; 
         let climbySubmitted = false;
         let climbyStatus = {};
 
-        function saveToStorage() {
+        // Synchronisation initiale avec Firebase via l'ID de l'appareil
+        window.initFirebaseSync = async function() {
+            if (window.loadUserDataFromFirebase) {
+                const userData = await window.loadUserDataFromFirebase(deviceId);
+                if (userData) {
+                    if (userData.completedDefis) {
+                        completedDefis = userData.completedDefis;
+                    }
+                    if (userData.pseudo && !pseudo) {
+                        pseudo = userData.pseudo;
+                    }
+                }
+            }
+            render();
+        };
+
+        async function syncDataToCloud() {
+            const totalScore = calculateScore();
             localStorage.setItem('climb_pseudo', pseudo);
             localStorage.setItem('climb_isLogged', isLogged);
             localStorage.setItem('climb_completedDefis', JSON.stringify(completedDefis));
+
+            if (window.saveUserDataToFirebase) {
+                await window.saveUserDataToFirebase(deviceId, pseudo, completedDefis, totalScore);
+            }
         }
 
-        function handleLogin(e) {
+        async function handleLogin(e) {
             e.preventDefault();
             const input = document.getElementById('pseudoInput');
             if (input.value.trim()) {
                 pseudo = input.value.trim();
                 isLogged = true;
-                saveToStorage();
+                await syncDataToCloud();
                 render();
             }
         }
@@ -337,9 +413,9 @@
             return total;
         }
 
-        function toggleDefi(defiId) {
+        async function toggleDefi(defiId) {
             completedDefis[defiId] = !completedDefis[defiId];
-            saveToStorage();
+            await syncDataToCloud();
             render();
         }
 
@@ -353,8 +429,13 @@
             render();
         }
 
-        function changeTab(tab) {
+        async function changeTab(tab) {
             currentTab = tab;
+            if (tab === 'classement') {
+                if (window.getGlobalLeaderboardFromFirebase) {
+                    globalLeaderboardData = await window.getGlobalLeaderboardFromFirebase();
+                }
+            }
             if (tab === 'defi_mois') {
                 climbyLevel = null; 
                 climbyInputs = {};
@@ -438,7 +519,7 @@
         }
 
         // --- RENDU ---
-        function render() {
+        async function render() {
             const app = document.getElementById('app');
 
             if (!isLogged) {
@@ -626,8 +707,12 @@
                     }
                 } 
                 else {
-                    // Classement épuré (uniquement le joueur actuel sans faux profils)
-                    const userEntry = [{ rank: 1, pseudo: pseudo, score: totalScore, isCurrent: true }];
+                    // Classement global basé sur l'appareil (device_id)
+                    const rankedUsers = globalLeaderboardData.map((p, i) => ({
+                        ...p,
+                        rank: i + 1,
+                        isCurrent: p.deviceId === deviceId
+                    }));
 
                     const buildTable = (data, title, subtitle, bgColor) => `
                         <div class="flex-1 bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100">
@@ -635,12 +720,12 @@
                                 <h2 class="text-2xl font-black mb-1">${title}</h2>
                                 <p class="text-white/80 text-sm opacity-80">${subtitle}</p>
                             </div>
-                            <div class="divide-y divide-gray-50">
-                                ${data.map(p => `
-                                    <div class="flex items-center p-4 bg-purple-50">
-                                        <div class="w-8 font-black text-lg text-yellow-500">#${p.rank}</div>
-                                        <div class="flex-1 font-bold text-purple-700">
-                                            ${p.pseudo} <span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>
+                            <div class="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+                                ${data.length === 0 ? '<p class="p-6 text-center text-gray-400">Aucun participant pour le moment.</p>' : data.map(p => `
+                                    <div class="flex items-center p-4 ${p.isCurrent ? 'bg-purple-50' : 'hover:bg-gray-50'}">
+                                        <div class="w-8 font-black text-lg ${p.rank === 1 ? 'text-yellow-500' : p.rank === 2 ? 'text-gray-400' : p.rank === 3 ? 'text-orange-500' : 'text-gray-300'}">#${p.rank}</div>
+                                        <div class="flex-1 font-bold ${p.isCurrent ? 'text-purple-700' : 'text-gray-700'}">
+                                            ${p.pseudo || 'Anonyme'} ${p.isCurrent ? `<span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>` : ''}
                                         </div>
                                         <div class="font-black ${bgColor.includes('purple') ? 'text-purple-600 bg-purple-100' : 'text-teal-600 bg-teal-100'} px-3 py-1 rounded-full text-sm">${p.score} pts</div>
                                     </div>
@@ -652,11 +737,9 @@
                     html += `
                         <div class="p-4 flex flex-col md:flex-row gap-6">
                             <div class="flex bg-gray-200 rounded-xl p-1 md:hidden mb-4">
-                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Aujourd'hui</button>
-                                <button onclick="changeLeaderboardTab('semaine')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'semaine' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Cette Semaine</button>
+                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Global</button>
                             </div>
-                            <div class="${leaderboardTab !== 'jour' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(userEntry, "Top du Jour", "Votre score personnel", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
-                            <div class="${leaderboardTab !== 'semaine' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(userEntry, "Top de la Semaine", "Votre score personnel", "bg-gradient-to-r from-teal-500 to-teal-400")}</div>
+                            <div class="flex-1">${buildTable(rankedUsers, "Classement Général", "Scores synchronisés de la base de données", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
                         </div>
                     `;
                 }
@@ -729,7 +812,10 @@
             lucide.createIcons();
         }
 
-        render();
+        // Lancement initial au chargement du script si pas géré par le module
+        if (!isLogged) {
+            render();
+        }
     </script>
 </body>
 </html>
