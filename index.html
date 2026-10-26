@@ -178,7 +178,6 @@
             localStorage.setItem('climbup_userid', userId);
         }
 
-        // Chargement instantané des points en mémoire locale (anti-perte au F5)
         let completedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
         
         let currentTab = 'carte'; 
@@ -231,13 +230,12 @@
                 localStorage.setItem('climbup_pseudo', pseudo);
                 isLogged = true;
                 
-                // Envoi Firebase (avec catch silencieux si les règles Firestore bloquent)
                 try {
                     setDoc(doc(db, "users", userId), {
                         pseudo: pseudo,
                         completedDefis: completedDefis,
                         lastUpdated: Date.now()
-                    }, { merge: true }).catch(err => console.warn("Erreur de sauvegarde Firebase :", err));
+                    }, { merge: true }).catch(err => console.warn("Erreur Firebase :", err));
                 } catch(e) {}
 
                 render();
@@ -251,16 +249,16 @@
                 completedDefis[defiId] = Date.now(); 
             }
             
-            // SAUVEGARDE LOCALE INSTANTANÉE (Évite la perte au F5)
             localStorage.setItem('climbup_defis', JSON.stringify(completedDefis));
             render();
             
-            // Mise à jour de Firebase en arrière-plan
             try {
+                // AJOUT DU PSEUDO ICI pour garantir qu'il ne soit jamais "undefined" dans la base
                 setDoc(doc(db, "users", userId), {
+                    pseudo: pseudo, 
                     completedDefis: completedDefis,
                     lastUpdated: Date.now()
-                }, { merge: true }).catch(err => console.warn("Erreur de sauvegarde Firebase :", err));
+                }, { merge: true }).catch(err => console.warn("Erreur Firebase :", err));
             } catch(e) {}
         };
 
@@ -506,7 +504,6 @@
                     }
                 } 
                 else {
-                    // INTÉGRATION LOCALE GARANTIE : On s'ajoute toujours soi-même au classement, même si la base Firebase est injoignable
                     let usersList = [...allUsersData];
                     if (isLogged) {
                         const myIndex = usersList.findIndex(u => u.id === userId);
@@ -518,10 +515,15 @@
                         }
                     }
 
-                    // Construction dynamique du classement
+                    // SÉCURITÉ AJOUTÉE ICI : "u.pseudo || 'Anonyme'" empêche tout undefined
                     const usersScores = usersList.map(u => {
                         const scores = calculateUserScores(u.completedDefis || {});
-                        return { pseudo: u.pseudo, daily: scores.daily, weekly: scores.weekly, isCurrent: u.id === userId };
+                        return { 
+                            pseudo: u.pseudo || 'Anonyme', 
+                            daily: scores.daily, 
+                            weekly: scores.weekly, 
+                            isCurrent: u.id === userId 
+                        };
                     });
 
                     const dbJour = usersScores.filter(u => u.daily > 0).sort((a,b) => b.daily - a.daily).map((u, i) => ({...u, rank: i+1, score: u.daily}));
@@ -630,7 +632,6 @@
         async function initApp() {
             render(); 
             
-            // Écoute permanente pour le classement en temps réel
             try {
                 onSnapshot(collection(db, "users"), (snapshot) => {
                     allUsersData = [];
@@ -641,11 +642,9 @@
                         render();
                     }
                 }, (error) => {
-                    console.warn("L'écoute du classement a échoué (vérifiez vos règles Firebase) :", error);
+                    console.warn("Écoute Firebase échouée :", error);
                 });
-            } catch (e) {
-                console.warn("Firebase non disponible, fonctionnement hors-ligne actif.");
-            }
+            } catch (e) {}
         }
 
         initApp();
