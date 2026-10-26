@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Climb Up - Défis avec Climby</title>
-    <!-- Tailwind CSS pour le style -->
+    <title>Climb Up - Défis</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons pour les icônes -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @keyframes slideUp {
             from { transform: translateY(100%); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
-        @keyframes climbBounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px); }
+        @keyframes spookyFade {
+            0% { opacity: 0; transform: scale(0.95); filter: hue-rotate(0deg); }
+            50% { filter: hue-rotate(40deg); }
+            100% { opacity: 1; transform: scale(1); filter: hue-rotate(0deg); }
         }
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
@@ -25,8 +24,8 @@
         .modal-animate {
             animation: slideUp 0.3s ease-out forwards;
         }
-        .climby-bounce {
-            animation: climbBounce 2s ease-in-out infinite;
+        .halloween-transition {
+            animation: spookyFade 0.5s ease-out forwards;
         }
         .shake-error {
             animation: shake 0.4s ease-in-out;
@@ -34,15 +33,14 @@
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased select-none transition-colors duration-500 overflow-x-hidden relative">
+<body class="bg-gray-50 text-gray-800 antialiased select-none transition-colors duration-500">
 
     <div id="app"></div>
 
-    <!-- Firebase SDK & Database Configuration -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+        // --- INITIALISATION FIREBASE ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCAzdG02k6xz_cjZlO7mHvgE4Qtm48ZJZs",
@@ -54,473 +52,280 @@
             measurementId: "G-XK39EL0BTM"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const db = getFirestore(app);
+        const fireApp = initializeApp(firebaseConfig);
+        const db = getFirestore(fireApp);
 
-        // Fonctions globales exposées pour interagir avec Firestore basées sur l'ID de l'appareil (device_id)
-        window.saveUserDataToFirebase = async (deviceId, pseudo, completedDefis, totalScore) => {
-            try {
-                await setDoc(doc(db, "users", deviceId), {
-                    deviceId: deviceId,
-                    pseudo: pseudo,
-                    completedDefis: completedDefis,
-                    score: totalScore,
-                    lastUpdate: new Date().toISOString()
-                }, { merge: true });
-            } catch (e) {
-                console.error("Erreur lors de la sauvegarde Firebase :", e);
-            }
-        };
-
-        window.loadUserDataFromFirebase = async (deviceId) => {
-            try {
-                const docRef = doc(db, "users", deviceId);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    return docSnap.data();
-                }
-            } catch (e) {
-                console.error("Erreur lors du chargement Firebase :", e);
-            }
-            return null;
-        };
-
-        window.getGlobalLeaderboardFromFirebase = async () => {
-            try {
-                const querySnapshot = await getDocs(collection(db, "users"));
-                let users = [];
-                querySnapshot.forEach((doc) => {
-                    users.push(doc.data());
-                });
-                // Tri du score le plus haut au plus bas
-                users.sort((a, b) => b.score - a.score);
-                return users;
-            } catch (e) {
-                console.error("Erreur chargement classement :", e);
-                return [];
-            }
-        };
-
-        // Lancement de la synchro au démarrage
-        window.initFirebaseSync();
-    </script>
-
-    <script>
-        // --- DONNÉES DES ATELIERS & RÉPONSES DU DÉFI DE CLIMBY ---
-        const REPONSES_CLIMBY = {
-            'bambous': 7,
-            'faceaface': 12,
-            'zigzag': 4,
-            'nuages': 3,
-            'fissure': 9,
-            'haricot': 5,
-            'labyrinthe': 8,
-            'tangrams': 6,
-            'chrono_gauche': 2,
-            'chrono_droit': 1,
-            'diedre': 10,
-            'dinosaures': 13,
-            'tuyaux': 11,
-            'gratteciel': 15,
-            'planetes': 14,
-            'engrenage': 18,
-            'rondin': 16,
-            'echelle': 17,
-            'tornade': 19
+        // --- DONNÉES DES ATELIERS & RÉPONSES DU DÉFI D'HALLOWEEN ---
+        const REPONSES_HALLOWEEN = {
+            'bambous': 7, 'faceaface': 12, 'zigzag': 4, 'nuages': 3, 'fissure': 9,
+            'haricot': 5, 'labyrinthe': 8, 'tangrams': 6, 'chrono_gauche': 2,
+            'chrono_droit': 1, 'diedre': 10, 'dinosaures': 13, 'tuyaux': 11,
+            'gratteciel': 15, 'planetes': 14, 'engrenage': 18, 'rondin': 16,
+            'echelle': 17, 'tornade': 19
         };
 
         const ATELIERS = [
             {
                 id: 'bambous', name: 'Les bambous',
                 defis: [{ id: 'b1', text: 'Être debout sur le dernier bambou', points: 5 }, { id: 'b2', text: 'Monter sans les mains', points: 10 }, { id: 'b3', text: 'Monter les yeux bandés', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-sky-950 w-full h-full flex items-end justify-center gap-1 sm:gap-1.5 px-2 overflow-hidden">
-                        ${[20, 30, 42, 55, 68, 80, 92].map(h => `<div class="w-2.5 sm:w-4 bg-green-600 rounded-t-full shadow-inner border-r border-green-700" style="height: ${h}%"></div>`).join('')}
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-sky-950 w-full h-full flex items-end justify-center gap-1 sm:gap-1.5 px-2 overflow-hidden">${[20, 30, 42, 55, 68, 80, 92].map(h => `<div class="w-2.5 sm:w-4 bg-green-600 rounded-t-full shadow-inner border-r border-green-700" style="height: ${h}%"></div>`).join('')}</div>`
             },
             {
                 id: 'faceaface', name: 'Face à face',
                 defis: [{ id: 'f1', text: 'Utiliser que les prises vertes', points: 5 }, { id: 'f2', text: 'Utiliser que les prises violettes', points: 10 }, { id: 'f3', text: 'Grimper en miroir (en binôme)', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-white/40 backdrop-blur-sm w-full h-full border-4 border-blue-200 relative overflow-hidden">
-                        <div class="absolute top-3 left-4 w-3 h-3 bg-green-400 rounded-full shadow"></div>
-                        <div class="absolute top-8 right-6 w-3.5 h-3.5 bg-purple-500 rounded-full shadow"></div>
-                        <div class="absolute top-1/3 left-8 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 right-10 w-3 h-3 bg-green-400 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 left-5 w-4 h-4 bg-purple-500 rounded-full shadow"></div>
-                        <div class="absolute bottom-6 left-10 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div>
-                        <div class="absolute bottom-4 right-5 w-3 h-3 bg-green-400 rounded-full shadow"></div>
-                        <div class="absolute top-1/4 left-1/2 w-3 h-3 bg-yellow-400 rounded-full shadow"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-white/40 backdrop-blur-sm w-full h-full border-4 border-blue-200 relative overflow-hidden"><div class="absolute top-3 left-4 w-3 h-3 bg-green-400 rounded-full shadow"></div><div class="absolute top-8 right-6 w-3.5 h-3.5 bg-purple-500 rounded-full shadow"></div><div class="absolute top-1/3 left-8 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div><div class="absolute top-1/2 right-10 w-3 h-3 bg-green-400 rounded-full shadow"></div><div class="absolute top-1/2 left-5 w-4 h-4 bg-purple-500 rounded-full shadow"></div><div class="absolute bottom-6 left-10 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div><div class="absolute bottom-4 right-5 w-3 h-3 bg-green-400 rounded-full shadow"></div><div class="absolute top-1/4 left-1/2 w-3 h-3 bg-yellow-400 rounded-full shadow"></div></div>`
             },
             {
                 id: 'zigzag', name: 'Zig Zag',
                 defis: [{ id: 'z1', text: 'Utiliser que les barres rouges', points: 5 }, { id: 'z2', text: 'Utiliser que les pinces jaunes', points: 10 }, { id: 'z3', text: 'Ne pas utiliser les trous sur le côté', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-green-700 w-full h-full flex flex-col justify-evenly px-4">
-                        <div class="h-3 bg-red-600 transform -skew-y-12 shadow-sm"></div>
-                        <div class="h-3 bg-yellow-400 transform skew-y-12 shadow-sm"></div>
-                        <div class="h-3 bg-red-600 transform -skew-y-12 shadow-sm"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-green-700 w-full h-full flex flex-col justify-evenly px-4"><div class="h-3 bg-red-600 transform -skew-y-12 shadow-sm"></div><div class="h-3 bg-yellow-400 transform skew-y-12 shadow-sm"></div><div class="h-3 bg-red-600 transform -skew-y-12 shadow-sm"></div></div>`
             },
             {
                 id: 'nuages', name: 'Les nuages',
                 defis: [{ id: 'n1', text: 'Utiliser que 4 prises roses', points: 5 }, { id: 'n2', text: 'Utiliser que 3 prises roses', points: 10 }, { id: 'n3', text: 'Utiliser que 2 prises roses', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-[#8b5a2b] w-full h-full flex flex-col items-center justify-around py-3">
-                        <div class="w-16 h-6 bg-gray-200 rounded-full shadow-md relative"><div class="absolute -top-2 left-3 w-8 h-6 bg-gray-200 rounded-full"></div><div class="absolute -top-3 right-3 w-7 h-7 bg-gray-200 rounded-full"></div></div>
-                        <div class="w-20 h-7 bg-gray-200 rounded-full shadow-md relative flex items-center justify-center"><div class="absolute -top-3 left-4 w-9 h-7 bg-gray-200 rounded-full"></div><div class="absolute -top-3 right-4 w-8 h-8 bg-gray-200 rounded-full"></div><div class="w-2 h-2 rounded-full bg-pink-500 z-10"></div></div>
-                        <div class="w-14 h-5 bg-gray-200 rounded-full shadow-md relative"><div class="absolute -top-2 left-2 w-6 h-5 bg-gray-200 rounded-full"></div></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-[#8b5a2b] w-full h-full flex flex-col items-center justify-around py-3"><div class="w-16 h-6 bg-gray-200 rounded-full shadow-md relative"><div class="absolute -top-2 left-3 w-8 h-6 bg-gray-200 rounded-full"></div><div class="absolute -top-3 right-3 w-7 h-7 bg-gray-200 rounded-full"></div></div><div class="w-20 h-7 bg-gray-200 rounded-full shadow-md relative flex items-center justify-center"><div class="absolute -top-3 left-4 w-9 h-7 bg-gray-200 rounded-full"></div><div class="absolute -top-3 right-4 w-8 h-8 bg-gray-200 rounded-full"></div><div class="w-2 h-2 rounded-full bg-pink-500 z-10"></div></div><div class="w-14 h-5 bg-gray-200 rounded-full shadow-md relative"><div class="absolute -top-2 left-2 w-6 h-5 bg-gray-200 rounded-full"></div></div></div>`
             },
             {
                 id: 'fissure', name: 'La fissure',
                 defis: [{ id: 'fi1', text: 'Fissure pour mains, prises pour pieds', points: 5 }, { id: 'fi2', text: 'Prises pour mains, fissure pour pieds', points: 10 }, { id: 'fi3', text: 'Utiliser que la fissure', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-[#e5d3b3] w-full h-full border-x-8 border-blue-500 relative">
-                        <svg viewBox="0 0 100 100" class="w-full h-full" fill="none" stroke="#2563eb" stroke-width="6" stroke-linejoin="miter"><path d="M 40 0 L 20 45 L 60 45 L 30 100" /></svg>
-                        <div class="absolute top-6 left-2 w-2.5 h-2.5 bg-red-500 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 left-2 w-2.5 h-2.5 bg-yellow-400 rounded-full shadow"></div>
-                        <div class="absolute top-10 right-2 w-2.5 h-2.5 bg-green-500 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 right-2 w-2.5 h-2.5 bg-purple-500 rounded-full shadow"></div>
-                        <div class="absolute bottom-6 right-2 w-2.5 h-2.5 bg-blue-400 rounded-full shadow"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-[#e5d3b3] w-full h-full border-x-8 border-blue-500 relative"><svg viewBox="0 0 100 100" class="w-full h-full" fill="none" stroke="#2563eb" stroke-width="6" stroke-linejoin="miter"><path d="M 40 0 L 20 45 L 60 45 L 30 100" /></svg><div class="absolute top-6 left-2 w-2.5 h-2.5 bg-red-500 rounded-full shadow"></div><div class="absolute top-1/2 left-2 w-2.5 h-2.5 bg-yellow-400 rounded-full shadow"></div><div class="absolute top-10 right-2 w-2.5 h-2.5 bg-green-500 rounded-full shadow"></div><div class="absolute top-1/2 right-2 w-2.5 h-2.5 bg-purple-500 rounded-full shadow"></div><div class="absolute bottom-6 right-2 w-2.5 h-2.5 bg-blue-400 rounded-full shadow"></div></div>`
             },
             {
                 id: 'haricot', name: 'Le haricot magique',
                 defis: [{ id: 'h1', text: 'Ne pas utiliser les 4 feuilles détachées', points: 5 }, { id: 'h2', text: 'Utiliser que les prises jaunes', points: 10 }, { id: 'h3', text: 'Utiliser que la tige', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-blue-900 w-full h-full flex items-center justify-center">
-                        <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md" fill="none" stroke="#84cc16" stroke-width="12" stroke-linecap="round"><path d="M 50 90 Q 20 60 60 40 T 40 10" /></svg>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-blue-900 w-full h-full flex items-center justify-center"><svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md" fill="none" stroke="#84cc16" stroke-width="12" stroke-linecap="round"><path d="M 50 90 Q 20 60 60 40 T 40 10" /></svg></div>`
             },
             {
                 id: 'labyrinthe', name: 'Le labyrinthe',
                 defis: [{ id: 'l1', text: 'Utiliser que les parties gauche et droites', points: 5 }, { id: 'l2', text: 'Toucher les 7 miroirs', points: 10 }, { id: 'l3', text: 'Les yeux bandés, toucher les 7 miroirs', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-green-600 w-full h-full border-x-8 border-yellow-400 p-2 flex flex-col justify-around">
-                        <div class="w-full h-2 bg-red-600 rounded"></div>
-                        <div class="w-2/3 h-2 bg-red-600 rounded self-end"></div>
-                        <div class="w-3/4 h-2 bg-red-600 rounded"></div>
-                        <div class="w-1/2 h-2 bg-red-600 rounded self-center"></div>
-                        <div class="w-4/5 h-2 bg-red-600 rounded self-end"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-green-600 w-full h-full border-x-8 border-yellow-400 p-2 flex flex-col justify-around"><div class="w-full h-2 bg-red-600 rounded"></div><div class="w-2/3 h-2 bg-red-600 rounded self-end"></div><div class="w-3/4 h-2 bg-red-600 rounded"></div><div class="w-1/2 h-2 bg-red-600 rounded self-center"></div><div class="w-4/5 h-2 bg-red-600 rounded self-end"></div></div>`
             },
             {
                 id: 'tangrams', name: 'Les tangrams',
                 defis: [{ id: 'ta1', text: 'Tangrams pour mains, vertes pieds', points: 5 }, { id: 'ta2', text: 'Utiliser que les tangrams', points: 10 }, { id: 'ta3', text: 'Utiliser que les prises vertes', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-[#a16207] w-full h-full p-2 flex flex-col justify-around items-center border-x-8 border-yellow-500">
-                        <div class="w-6 h-6 bg-amber-800 transform rotate-12 rounded-sm shadow"></div>
-                        <div class="w-8 h-4 bg-amber-900 transform -rotate-45 rounded-sm shadow"></div>
-                        <div class="w-7 h-7 bg-amber-700 transform rotate-45 rounded-sm shadow"></div>
-                        <div class="w-6 h-5 bg-amber-900 transform rotate-6 rounded-sm shadow"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-[#a16207] w-full h-full p-2 flex flex-col justify-around items-center border-x-8 border-yellow-500"><div class="w-6 h-6 bg-amber-800 transform rotate-12 rounded-sm shadow"></div><div class="w-8 h-4 bg-amber-900 transform -rotate-45 rounded-sm shadow"></div><div class="w-7 h-7 bg-amber-700 transform rotate-45 rounded-sm shadow"></div><div class="w-6 h-5 bg-amber-900 transform rotate-6 rounded-sm shadow"></div></div>`
             },
             {
                 id: 'chrono_gauche', name: 'Le chrono (G)',
                 defis: [{ id: 'cg1', text: 'Moins de 90 secondes', points: 5 }, { id: 'cg2', text: 'Moins de 60 secondes', points: 10 }, { id: 'cg3', text: 'Moins de 30 secondes', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-red-600 w-full h-full border-x-8 border-blue-500 relative flex flex-col items-center justify-end pb-3">
-                        <div class="absolute top-3 left-4 w-3 h-3 bg-green-400 rounded-full shadow"></div>
-                        <div class="absolute top-10 right-6 w-3.5 h-3.5 bg-blue-300 rounded-full shadow"></div>
-                        <div class="absolute top-1/3 left-6 w-3.5 h-3.5 bg-green-500 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 right-5 w-3 h-3 bg-blue-400 rounded-full shadow"></div>
-                        <div class="bg-black text-red-500 font-mono text-[10px] px-2 py-0.5 rounded border border-gray-700 shadow-md">00.00</div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-red-600 w-full h-full border-x-8 border-blue-500 relative flex flex-col items-center justify-end pb-3"><div class="absolute top-3 left-4 w-3 h-3 bg-green-400 rounded-full shadow"></div><div class="absolute top-10 right-6 w-3.5 h-3.5 bg-blue-300 rounded-full shadow"></div><div class="absolute top-1/3 left-6 w-3.5 h-3.5 bg-green-500 rounded-full shadow"></div><div class="absolute top-1/2 right-5 w-3 h-3 bg-blue-400 rounded-full shadow"></div><div class="bg-black text-red-500 font-mono text-[10px] px-2 py-0.5 rounded border border-gray-700 shadow-md">00.00</div></div>`
             },
             {
                 id: 'chrono_droit', name: 'Le chrono (D)',
                 defis: [{ id: 'cd1', text: 'Moins de 90 secondes', points: 5 }, { id: 'cd2', text: 'Moins de 60 secondes', points: 10 }, { id: 'cd3', text: 'Moins de 30 secondes', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-red-600 w-full h-full border-x-8 border-blue-500 relative flex flex-col items-center justify-end pb-3">
-                        <div class="absolute top-4 right-4 w-3 h-3 bg-yellow-400 rounded-full shadow"></div>
-                        <div class="absolute top-12 left-5 w-3.5 h-3.5 bg-purple-500 rounded-full shadow"></div>
-                        <div class="absolute top-1/3 right-6 w-3.5 h-3.5 bg-red-400 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 left-6 w-3 h-3 bg-yellow-300 rounded-full shadow"></div>
-                        <div class="bg-black text-red-500 font-mono text-[10px] px-2 py-0.5 rounded border border-gray-700 shadow-md">00.00</div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-red-600 w-full h-full border-x-8 border-blue-500 relative flex flex-col items-center justify-end pb-3"><div class="absolute top-4 right-4 w-3 h-3 bg-yellow-400 rounded-full shadow"></div><div class="absolute top-12 left-5 w-3.5 h-3.5 bg-purple-500 rounded-full shadow"></div><div class="absolute top-1/3 right-6 w-3.5 h-3.5 bg-red-400 rounded-full shadow"></div><div class="absolute top-1/2 left-6 w-3 h-3 bg-yellow-300 rounded-full shadow"></div><div class="bg-black text-red-500 font-mono text-[10px] px-2 py-0.5 rounded border border-gray-700 shadow-md">00.00</div></div>`
             },
             {
                 id: 'diedre', name: 'Le dièdre',
                 defis: [{ id: 'd1', text: 'Utiliser que les prises vertes', points: 5 }, { id: 'd2', text: 'Utiliser que les prises bleues', points: 10 }, { id: 'd3', text: 'Ne pas utiliser de prises (mains)', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-gradient-to-r from-blue-600 via-blue-900 to-blue-600 w-full h-full relative flex justify-center">
-                        <div class="w-0.5 h-full bg-black/60"></div>
-                        <div class="absolute top-4 left-3 w-3 h-3 bg-green-400 rounded-full shadow"></div>
-                        <div class="absolute top-12 right-4 w-3 h-3 bg-blue-400 rounded-full shadow"></div>
-                        <div class="absolute top-1/2 left-5 w-3.5 h-3.5 bg-green-500 rounded-full shadow"></div>
-                        <div class="absolute bottom-6 right-5 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-gradient-to-r from-blue-600 via-blue-900 to-blue-600 w-full h-full relative flex justify-center"><div class="w-0.5 h-full bg-black/60"></div><div class="absolute top-4 left-3 w-3 h-3 bg-green-400 rounded-full shadow"></div><div class="absolute top-12 right-4 w-3 h-3 bg-blue-400 rounded-full shadow"></div><div class="absolute top-1/2 left-5 w-3.5 h-3.5 bg-green-500 rounded-full shadow"></div><div class="absolute bottom-6 right-5 w-3.5 h-3.5 bg-blue-500 rounded-full shadow"></div></div>`
             },
             {
                 id: 'dinosaures', name: 'Les dinosaures',
                 defis: [{ id: 'di1', text: 'Utiliser que jaunes et vertes', points: 5 }, { id: 'di2', text: 'Utiliser que oranges et violettes', points: 10 }, { id: 'di3', text: 'Utiliser que bleues', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-white w-full h-full border-x-8 border-blue-500 flex flex-col items-center justify-around py-2">
-                        <span class="text-xs font-bold text-green-600">🦖 Dino</span>
-                        <span class="text-xs font-bold text-purple-600">🦕 Dino</span>
-                        <span class="text-xs font-bold text-yellow-500">🦖 Dino</span>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-white w-full h-full border-x-8 border-blue-500 flex flex-col items-center justify-around py-2"><span class="text-xs font-bold text-green-600">🦖 Dino</span><span class="text-xs font-bold text-purple-600">🦕 Dino</span><span class="text-xs font-bold text-yellow-500">🦖 Dino</span></div>`
             },
             {
                 id: 'tuyaux', name: 'Les tuyaux',
                 defis: [{ id: 'tu1', text: 'Utiliser que les tuyaux verts', points: 5 }, { id: 'tu2', text: 'Utiliser que les tuyaux bleus', points: 10 }, { id: 'tu3', text: 'Lumières vertes et oranges', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-white w-full h-full border-x-8 border-teal-600 relative overflow-hidden">
-                        <div class="absolute top-3 left-4 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)]"></div>
-                        <div class="absolute top-8 right-5 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.9)]"></div>
-                        <div class="absolute top-1/3 left-6 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]"></div>
-                        <div class="absolute top-1/2 right-7 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)]"></div>
-                        <div class="absolute bottom-6 left-5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]"></div>
-                        <div class="absolute bottom-3 right-4 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-white w-full h-full border-x-8 border-teal-600 relative overflow-hidden"><div class="absolute top-3 left-4 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)]"></div><div class="absolute top-8 right-5 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.9)]"></div><div class="absolute top-1/3 left-6 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]"></div><div class="absolute top-1/2 right-7 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)]"></div><div class="absolute bottom-6 left-5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]"></div><div class="absolute bottom-3 right-4 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]"></div></div>`
             },
             {
                 id: 'gratteciel', name: 'Le gratte-ciel',
                 defis: [{ id: 'g1', text: 'Utiliser que les fenêtres jaunes', points: 5 }, { id: 'g2', text: 'Utiliser que les fenêtres rouges', points: 10 }, { id: 'g3', text: 'Utiliser que les fenêtres bleues', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-black w-full h-full p-2 grid grid-cols-3 gap-1">
-                        ${Array.from({ length: 15 }).map((_, i) => `<div class="w-full h-full rounded-xs ${i % 4 === 0 ? 'bg-yellow-400' : i % 7 === 0 ? 'bg-red-600' : i % 5 === 0 ? 'bg-blue-600' : 'bg-gray-900'}"></div>`).join('')}
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-black w-full h-full p-2 grid grid-cols-3 gap-1">${Array.from({ length: 15 }).map((_, i) => `<div class="w-full h-full rounded-xs ${i % 4 === 0 ? 'bg-yellow-400' : i % 7 === 0 ? 'bg-red-600' : i % 5 === 0 ? 'bg-blue-600' : 'bg-gray-900'}"></div>`).join('')}</div>`
             },
             {
                 id: 'planetes', name: 'Les planètes',
                 defis: [{ id: 'p1', text: 'Utiliser que les barres en bois', points: 5 }, { id: 'p2', text: 'Utiliser que les planètes', points: 10 }, { id: 'p3', text: 'Utiliser que les petites planètes', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-gray-950 w-full h-full border-x-4 border-pink-500 relative flex items-center justify-center">
-                        <div class="absolute top-3 left-2 w-8 h-8 rounded-full bg-amber-200/80 shadow-inner"></div>
-                        <div class="absolute top-12 right-3 w-6 h-6 rounded-full bg-amber-100/70 shadow-inner"></div>
-                        <div class="absolute bottom-4 left-5 w-9 h-9 rounded-full bg-amber-300/90 shadow-inner"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-gray-950 w-full h-full border-x-4 border-pink-500 relative flex items-center justify-center"><div class="absolute top-3 left-2 w-8 h-8 rounded-full bg-amber-200/80 shadow-inner"></div><div class="absolute top-12 right-3 w-6 h-6 rounded-full bg-amber-100/70 shadow-inner"></div><div class="absolute bottom-4 left-5 w-9 h-9 rounded-full bg-amber-300/90 shadow-inner"></div></div>`
             },
             {
                 id: 'engrenage', name: "L'engrenage",
                 defis: [{ id: 'e1', text: 'Utiliser que les prises oranges', points: 5 }, { id: 'e2', text: 'Utiliser que les prises jaunes', points: 10 }, { id: 'e3', text: 'Oranges (pieds), jaunes (mains)', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-green-500 w-full h-full border-x-8 border-purple-700 flex flex-col items-center justify-around py-1">
-                        <div class="w-12 h-12 rounded-full bg-yellow-400 border-2 border-orange-500 shadow"></div>
-                        <div class="w-12 h-12 rounded-full bg-orange-500 border-2 border-purple-800 shadow"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-green-500 w-full h-full border-x-8 border-purple-700 flex flex-col items-center justify-around py-1"><div class="w-12 h-12 rounded-full bg-yellow-400 border-2 border-orange-500 shadow"></div><div class="w-12 h-12 rounded-full bg-orange-500 border-2 border-purple-800 shadow"></div></div>`
             },
             {
                 id: 'rondin', name: 'Le rondin de la jungle',
                 defis: [{ id: 'rj1', text: 'Mains: que les cordes du filet', points: 5 }, { id: 'rj2', text: 'Utiliser que les prises du rondin', points: 10 }, { id: 'rj3', text: 'Ne pas utiliser les mains sur le rondin', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-emerald-800 w-full h-full border-x-4 border-emerald-900 flex justify-center items-center">
-                        <div class="w-4 h-full bg-amber-800 rounded shadow-md border border-amber-950"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-emerald-800 w-full h-full border-x-4 border-emerald-900 flex justify-center items-center"><div class="w-4 h-full bg-amber-800 rounded shadow-md border border-amber-950"></div></div>`
             },
             {
                 id: 'echelle', name: "L'échelle de la jungle",
                 defis: [{ id: 'ej1', text: 'Mains: cordes verticales échelle', points: 5 }, { id: 'ej2', text: 'Cordes verticales (filet et échelle) mains', points: 10 }, { id: 'ej3', text: 'Ne pas utiliser les doigts pour grimper', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-emerald-800 w-full h-full border-x-4 border-emerald-900 flex flex-col justify-evenly items-center p-2">
-                        <div class="w-8 h-full border-x-2 border-amber-900 flex flex-col justify-around">
-                            <div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div>
-                        </div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-emerald-800 w-full h-full border-x-4 border-emerald-900 flex flex-col justify-evenly items-center p-2"><div class="w-8 h-full border-x-2 border-amber-900 flex flex-col justify-around"><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div><div class="w-full h-1 bg-amber-700"></div></div></div>`
             },
             {
                 id: 'tornade', name: 'La tornade',
                 defis: [{ id: 't1', text: 'Utiliser que les fentes', points: 5 }, { id: 't2', text: 'Utiliser que les fentes inversées', points: 10 }, { id: 't3', text: 'Ne pas utiliser les fentes', points: 20 }],
-                preview: `
-                    <div class="absolute inset-0 bg-slate-900 w-full h-full flex flex-col justify-between py-1 px-3">
-                        <div class="w-full h-2 bg-red-500 transform -rotate-3"></div>
-                        <div class="w-full h-2 bg-yellow-400 transform rotate-3"></div>
-                        <div class="w-full h-2 bg-green-500 transform -rotate-2"></div>
-                        <div class="w-full h-2 bg-blue-500 transform rotate-2"></div>
-                        <div class="w-full h-2 bg-teal-400 transform -rotate-3"></div>
-                        <div class="w-full h-2 bg-purple-600 transform rotate-3"></div>
-                        <div class="w-full h-2 bg-pink-500 transform -rotate-2"></div>
-                    </div>`
+                preview: `<div class="absolute inset-0 bg-slate-900 w-full h-full flex flex-col justify-between py-1 px-3"><div class="w-full h-2 bg-red-500 transform -rotate-3"></div><div class="w-full h-2 bg-yellow-400 transform rotate-3"></div><div class="w-full h-2 bg-green-500 transform -rotate-2"></div><div class="w-full h-2 bg-blue-500 transform rotate-2"></div><div class="w-full h-2 bg-teal-400 transform -rotate-3"></div><div class="w-full h-2 bg-purple-600 transform rotate-3"></div><div class="w-full h-2 bg-pink-500 transform -rotate-2"></div></div>`
             }
         ];
 
-        // --- GROUPES DE DIFFICULTÉ ---
         const DIFF_GROUPES = {
             'facile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade'],
             'moyen': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin'],
             'difficile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin', 'haricot', 'chrono_gauche', 'diedre', 'tuyaux', 'planetes', 'engrenage', 'chrono_droit']
         };
 
-        // --- ÉTATS & GESTION DE L'ID D'APPAREIL INDÉPENDANT DU PSEUDO ---
-        let deviceId = localStorage.getItem('climb_device_id');
-        if (!deviceId) {
-            deviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-            localStorage.setItem('climb_device_id', deviceId);
+        // --- GESTION DE L'IDENTITÉ & ÉTATS ---
+        let pseudo = localStorage.getItem('climbup_pseudo') || '';
+        let isLogged = !!pseudo;
+        
+        let userId = localStorage.getItem('climbup_userid');
+        if (!userId) {
+            // Création d'un identifiant unique (plusieurs peuvent avoir le même pseudo)
+            userId = 'user_' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+            localStorage.setItem('climbup_userid', userId);
         }
 
-        let pseudo = localStorage.getItem('climb_pseudo') || '';
-        let isLogged = localStorage.getItem('climb_isLogged') === 'true';
         let currentTab = 'carte'; 
         let leaderboardTab = 'jour';
         let selectedAtelierId = null;
         let completedDefis = {};
-        let globalLeaderboardData = [];
+        let allUsersData = [];
         
-        let climbyLevel = null; 
-        let climbyInputs = {}; 
-        let climbySubmitted = false;
-        let climbyStatus = {};
+        let halloweenLevel = null; 
+        let halloweenInputs = {}; 
+        let halloweenSubmitted = false;
+        let halloweenStatus = {};
 
-        // Synchronisation initiale avec Firebase via l'ID de l'appareil
-        window.initFirebaseSync = async function() {
-            if (window.loadUserDataFromFirebase) {
-                const userData = await window.loadUserDataFromFirebase(deviceId);
-                if (userData) {
-                    if (userData.completedDefis) {
-                        completedDefis = userData.completedDefis;
+        // --- CALCUL DES SCORES VIA TIMESTAMP ---
+        function getStartOfDay() {
+            const now = new Date();
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        }
+        function getStartOfWeek() {
+            const now = new Date();
+            const day = now.getDay();
+            // Lundi comme premier jour de la semaine
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0).getTime();
+        }
+        function calculateUserScores(defis) {
+            let total = 0, daily = 0, weekly = 0;
+            const startOfDay = getStartOfDay();
+            const startOfWeek = getStartOfWeek();
+
+            if (!defis) return { total: 0, daily: 0, weekly: 0 };
+
+            ATELIERS.forEach(atelier => {
+                atelier.defis.forEach(defi => {
+                    const timestamp = defis[defi.id];
+                    if (timestamp) {
+                        total += defi.points;
+                        if (timestamp >= startOfDay) daily += defi.points;
+                        if (timestamp >= startOfWeek) weekly += defi.points;
                     }
-                    if (userData.pseudo && !pseudo) {
-                        pseudo = userData.pseudo;
-                    }
-                }
-            }
-            render();
-        };
-
-        async function syncDataToCloud() {
-            const totalScore = calculateScore();
-            localStorage.setItem('climb_pseudo', pseudo);
-            localStorage.setItem('climb_isLogged', isLogged);
-            localStorage.setItem('climb_completedDefis', JSON.stringify(completedDefis));
-
-            if (window.saveUserDataToFirebase) {
-                await window.saveUserDataToFirebase(deviceId, pseudo, completedDefis, totalScore);
-            }
+                });
+            });
+            return { total, daily, weekly };
         }
 
-        async function handleLogin(e) {
+        // --- ACTIONS EXPORTÉES DANS WINDOW POUR HTML ---
+        window.handleLogin = function(e) {
             e.preventDefault();
             const input = document.getElementById('pseudoInput');
             if (input.value.trim()) {
                 pseudo = input.value.trim();
+                localStorage.setItem('climbup_pseudo', pseudo);
                 isLogged = true;
-                await syncDataToCloud();
+                
+                // Enregistrement dans Firebase
+                setDoc(doc(db, "users", userId), {
+                    pseudo: pseudo,
+                    completedDefis: completedDefis,
+                    lastUpdated: Date.now()
+                }, { merge: true }).catch(console.error);
+
                 render();
             }
-        }
+        };
 
-        function calculateScore() {
-            let total = 0;
-            ATELIERS.forEach(atelier => {
-                atelier.defis.forEach(defi => {
-                    if (completedDefis[defi.id]) total += defi.points;
-                });
-            });
-            return total;
-        }
-
-        async function toggleDefi(defiId) {
-            completedDefis[defiId] = !completedDefis[defiId];
-            await syncDataToCloud();
-            render();
-        }
-
-        function openModal(id) {
-            selectedAtelierId = id;
-            render();
-        }
-
-        function closeModal() {
-            selectedAtelierId = null;
-            render();
-        }
-
-        async function changeTab(tab) {
-            currentTab = tab;
-            if (tab === 'classement') {
-                if (window.getGlobalLeaderboardFromFirebase) {
-                    globalLeaderboardData = await window.getGlobalLeaderboardFromFirebase();
-                }
-            }
-            if (tab === 'defi_mois') {
-                climbyLevel = null; 
-                climbyInputs = {};
-                climbyStatus = {};
-                climbySubmitted = false;
+        window.toggleDefi = function(defiId) {
+            if (completedDefis[defiId]) {
+                delete completedDefis[defiId];
+            } else {
+                completedDefis[defiId] = Date.now(); // On stocke le moment où c'est coché pour le reset auto !
             }
             render();
-        }
+            
+            // Mise à jour de Firebase en arrière-plan
+            setDoc(doc(db, "users", userId), {
+                completedDefis: completedDefis,
+                lastUpdated: Date.now()
+            }, { merge: true }).catch(console.error);
+        };
 
-        function changeLeaderboardTab(tab) {
-            leaderboardTab = tab;
+        window.openModal = id => { selectedAtelierId = id; render(); };
+        window.closeModal = () => { selectedAtelierId = null; render(); };
+        window.changeTab = tab => { 
+            currentTab = tab; 
+            if (tab === 'defi_mois') { halloweenLevel = null; halloweenInputs = {}; halloweenStatus = {}; halloweenSubmitted = false; }
+            render(); 
+        };
+        window.changeLeaderboardTab = tab => { leaderboardTab = tab; render(); };
+
+        window.selectHalloweenLevel = lvl => {
+            halloweenLevel = lvl; halloweenInputs = {}; halloweenStatus = {}; halloweenSubmitted = false;
             render();
-        }
+        };
 
-        function selectClimbyLevel(lvl) {
-            climbyLevel = lvl;
-            climbyInputs = {};
-            climbyStatus = {};
-            climbySubmitted = false;
-            render();
-        }
-
-        function handleClimbyInput(atelierId, val) {
-            climbyInputs[atelierId] = val;
-            if (climbyStatus[atelierId]) {
-                delete climbyStatus[atelierId];
-            }
+        window.handleHalloweenInput = (atelierId, val) => {
+            halloweenInputs[atelierId] = val;
+            if (halloweenStatus[atelierId]) delete halloweenStatus[atelierId];
             const btn = document.getElementById('verifyBtn');
             if (btn) {
                 if (areAllFilled()) {
                     btn.disabled = false;
-                    btn.className = "px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 bg-purple-600 text-white shadow-purple-900/30 hover:bg-purple-500 cursor-pointer active:scale-95";
+                    btn.className = "px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 bg-orange-600 text-white shadow-orange-900/50 hover:bg-orange-500 cursor-pointer active:scale-95";
                 } else {
                     btn.disabled = true;
-                    btn.className = "px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 bg-gray-200 text-gray-400 cursor-not-allowed opacity-60";
+                    btn.className = "px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 bg-slate-800 text-slate-500 cursor-not-allowed opacity-60";
                 }
             }
-        }
+        };
 
         function getActiveAteliersForLevel() {
-            if (!climbyLevel) return [];
-            const ids = DIFF_GROUPES[climbyLevel];
-            return ATELIERS.filter(a => ids.includes(a.id));
+            if (!halloweenLevel) return [];
+            return ATELIERS.filter(a => DIFF_GROUPES[halloweenLevel].includes(a.id));
         }
 
         function areAllFilled() {
             const currentAteliers = getActiveAteliersForLevel();
             if (currentAteliers.length === 0) return false;
-            return currentAteliers.every(atelier => {
-                const val = climbyInputs[atelier.id];
+            return currentAteliers.every(a => {
+                const val = halloweenInputs[a.id];
                 return val !== undefined && val !== '' && val !== null && String(val).trim() !== '';
             });
         }
 
-        function verifyClimbyAnswers() {
+        window.verifyHalloweenAnswers = function() {
             const currentAteliers = getActiveAteliersForLevel();
             let allCorrect = true;
-            climbyStatus = {};
+            halloweenStatus = {};
 
             currentAteliers.forEach(atelier => {
-                const userVal = Number(climbyInputs[atelier.id]);
-                const correctVal = Number(REPONSES_CLIMBY[atelier.id]);
-                if (userVal === correctVal) {
-                    climbyStatus[atelier.id] = 'correct';
+                if (Number(halloweenInputs[atelier.id]) === Number(REPONSES_HALLOWEEN[atelier.id])) {
+                    halloweenStatus[atelier.id] = 'correct';
                 } else {
-                    climbyStatus[atelier.id] = 'error';
+                    halloweenStatus[atelier.id] = 'error';
                     allCorrect = false;
                 }
             });
-
-            climbySubmitted = true;
+            halloweenSubmitted = true;
             render();
-        }
+        };
 
-        function isClimbyCompleted() {
-            if (!climbyLevel || !climbySubmitted) return false;
-            const currentAteliers = getActiveAteliersForLevel();
-            return currentAteliers.every(atelier => {
-                return Number(climbyInputs[atelier.id]) === Number(REPONSES_CLIMBY[atelier.id]);
-            });
+        function isHalloweenCompleted() {
+            if (!halloweenLevel || !halloweenSubmitted) return false;
+            return getActiveAteliersForLevel().every(a => Number(halloweenInputs[a.id]) === Number(REPONSES_HALLOWEEN[a.id]));
         }
 
         // --- RENDU ---
-        async function render() {
+        function render() {
             const app = document.getElementById('app');
+            const isHalloween = (currentTab === 'defi_mois');
 
             if (!isLogged) {
                 app.innerHTML = `
@@ -544,22 +349,27 @@
                     </div>
                 `;
             } else {
-                const totalScore = calculateScore();
+                const myScores = calculateUserScores(completedDefis);
+                const totalScore = myScores.total; 
+                
+                let headerBg = isHalloween ? 'bg-slate-900 border-b border-orange-500/30' : 'bg-white shadow-sm';
+                let logoGradient = isHalloween ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-orange-400' : 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-teal-500';
+                let badgeStyle = isHalloween ? 'bg-orange-950 border border-orange-500/50 text-orange-400' : 'bg-purple-100 border border-purple-200 text-purple-700';
 
                 let html = `
-                    <div class="min-h-screen bg-gray-50 text-gray-800 pb-24 md:pb-8">
-                        <header class="bg-white shadow-sm sticky top-0 z-10 px-4 py-3 flex justify-between items-center">
+                    <div class="min-h-screen ${isHalloween ? 'bg-slate-950 text-slate-100 halloween-transition' : 'bg-gray-50 text-gray-800'} pb-24 md:pb-8">
+                        <header class="${headerBg} sticky top-0 z-10 px-4 py-3 flex justify-between items-center transition-colors duration-500">
                             <div class="flex items-center gap-2">
-                                <div class="w-8 h-8 bg-gradient-to-br from-purple-600 to-teal-500 rounded-full flex items-center justify-center text-white font-bold">
-                                    <i data-lucide="mountain" class="w-4 h-4"></i>
+                                <div class="w-8 h-8 ${isHalloween ? 'bg-orange-600' : 'bg-gradient-to-br from-purple-600 to-teal-500'} rounded-full flex items-center justify-center">
+                                    <i data-lucide="${isHalloween ? 'ghost' : 'trophy'}" class="text-white w-4 h-4"></i>
                                 </div>
-                                <span class="font-black text-xl bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-teal-500">Climb Up</span>
+                                <span class="font-black text-xl ${logoGradient}">Climb Up ${isHalloween ? '🎃 Halloween' : ''}</span>
                             </div>
                             <div class="flex items-center gap-4">
                                 <div class="text-right hidden md:block">
-                                    <p class="text-xs text-gray-500 font-bold uppercase">${pseudo}</p>
+                                    <p class="text-xs ${isHalloween ? 'text-orange-400' : 'text-gray-500'} font-bold uppercase">${pseudo}</p>
                                 </div>
-                                <div class="bg-purple-100 border border-purple-200 text-purple-700 px-4 py-2 rounded-full shadow-sm flex items-center gap-2">
+                                <div class="${badgeStyle} px-4 py-2 rounded-full shadow-sm flex items-center gap-2">
                                     <span class="font-black text-lg">${totalScore}</span>
                                     <span class="text-xs font-bold uppercase">pts</span>
                                 </div>
@@ -570,8 +380,8 @@
                             <button onclick="changeTab('carte')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'carte' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
                                 <i data-lucide="map"></i> La Carte
                             </button>
-                            <button onclick="changeTab('defi_mois')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'bg-white text-purple-600 border border-purple-200 shadow'}">
-                                <i data-lucide="sparkles"></i> Le Défi de Climby 🏔️
+                            <button onclick="changeTab('defi_mois')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'bg-slate-800 text-orange-400 border border-orange-500/30 shadow'}">
+                                <i data-lucide="ghost"></i> Défi d'Halloween 🎃
                             </button>
                             <button onclick="changeTab('classement')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'classement' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
                                 <i data-lucide="medal"></i> Classement
@@ -604,44 +414,38 @@
                     html += `</div>`;
                 } 
                 else if (currentTab === 'defi_mois') {
-                    if (!climbyLevel) {
+                    if (!halloweenLevel) {
                         html += `
                             <div class="p-6 flex flex-col items-center justify-center text-center py-12">
-                                <div class="w-24 h-24 bg-purple-100 border-2 border-purple-200 rounded-full flex items-center justify-center mb-4 shadow-inner overflow-hidden climby-bounce">
-                                    <svg viewBox="0 0 100 100" class="w-16 h-16 text-purple-600 fill-current"><circle cx="50" cy="40" r="20"/><path d="M 20 85 Q 50 60 80 85 Z"/></svg>
+                                <div class="w-20 h-20 bg-orange-600/20 border border-orange-500/40 rounded-full flex items-center justify-center mb-4">
+                                    <i data-lucide="ghost" class="w-10 h-10 text-orange-400"></i>
                                 </div>
-                                <h2 class="text-3xl font-black text-gray-800 mb-2">Le Défi de Climby 🏔️</h2>
-                                <p class="text-gray-500 text-sm mb-8 max-w-md">Climby le Yéti t'invite à retrouver les nombres cachés dans la salle ! Choisis ton niveau de difficulté :</p>
+                                <h2 class="text-3xl font-black text-orange-400 mb-2">Choisis ta difficulté</h2>
+                                <p class="text-slate-300 text-sm mb-8 max-w-md">Sélectionne le niveau du défi d'Halloween auquel tu souhaites participer :</p>
                                 <div class="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                                    <button onclick="selectClimbyLevel('facile')" class="flex-1 bg-white border-2 border-emerald-500 hover:bg-emerald-50 text-emerald-600 font-black py-5 rounded-2xl shadow-md transition active:scale-95 text-lg flex items-center justify-center gap-2">
-                                        🟢 Facile
-                                    </button>
-                                    <button onclick="selectClimbyLevel('moyen')" class="flex-1 bg-white border-2 border-amber-500 hover:bg-amber-50 text-amber-600 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">
-                                        🟠 Moyen
-                                    </button>
-                                    <button onclick="selectClimbyLevel('difficile')" class="flex-1 bg-white border-2 border-red-500 hover:bg-red-50 text-red-600 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">
-                                        🔴 Difficile
-                                    </button>
+                                    <button onclick="selectHalloweenLevel('facile')" class="flex-1 bg-slate-900 border-2 border-emerald-500/50 hover:bg-emerald-950/30 text-emerald-400 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">🟢 Facile</button>
+                                    <button onclick="selectHalloweenLevel('moyen')" class="flex-1 bg-slate-900 border-2 border-amber-500/50 hover:bg-amber-950/30 text-amber-400 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">🟠 Moyen</button>
+                                    <button onclick="selectHalloweenLevel('difficile')" class="flex-1 bg-slate-900 border-2 border-red-500/50 hover:bg-red-950/30 text-red-400 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">🔴 Difficile</button>
                                 </div>
                             </div>
                         `;
-                    } else if (isClimbyCompleted()) {
+                    } else if (isHalloweenCompleted()) {
                         html += `
-                            <div class="p-6 flex flex-col items-center justify-center text-center py-16">
-                                <div class="w-32 h-32 bg-purple-600 text-white rounded-full flex items-center justify-center shadow-xl mb-6 animate-bounce">
-                                    <i data-lucide="award" class="w-16 h-16"></i>
+                            <div class="p-6 flex flex-col items-center justify-center text-center py-16 halloween-transition">
+                                <div class="w-32 h-32 bg-orange-600 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(234,88,12,0.8)] mb-6 animate-bounce">
+                                    <i data-lucide="award" class="w-16 h-16 text-white"></i>
                                 </div>
-                                <h1 class="text-4xl font-black text-purple-700 mb-4">🏆 BRAVO AVEC CLIMBY (${climbyLevel.toUpperCase()}) ! 🎉</h1>
-                                <p class="text-gray-600 text-lg max-w-xl mb-8">
-                                    Félicitations <span class="font-bold text-purple-600">${pseudo}</span> ! Tu as résolu tous les ateliers du niveau ${climbyLevel} avec succès !
+                                <h1 class="text-4xl font-black text-orange-400 mb-4">🏆 VICTOIRE D'HALLOWEEN (${halloweenLevel.toUpperCase()}) ! 🎃</h1>
+                                <p class="text-slate-300 text-lg max-w-xl mb-8">
+                                    Félicitations <span class="font-bold text-orange-400">${pseudo}</span> ! Tu as résolu toutes les énigmes du niveau ${halloweenLevel} avec succès !
                                 </p>
-                                <div class="bg-white border-2 border-purple-200 p-6 rounded-3xl shadow-xl max-w-md w-full mb-8">
-                                    <p class="text-purple-700 font-bold mb-2">✨ Écran à présenter à l'accueil :</p>
-                                    <div class="bg-gray-900 text-teal-400 p-4 rounded-xl font-mono text-xl font-black tracking-wider shadow-inner">
-                                        [ VALIDÉ - CLIMBY ${climbyLevel.toUpperCase()} ]
+                                <div class="bg-slate-900 border-2 border-orange-500/50 p-6 rounded-3xl shadow-xl max-w-md w-full mb-8">
+                                    <p class="text-orange-300 font-bold mb-2">✨ Écran à présenter à l'accueil :</p>
+                                    <div class="bg-slate-950 p-4 rounded-xl border border-orange-500/20 text-emerald-400 font-mono text-xl font-black tracking-wider">
+                                        [ VALIDÉ - SPOOKY ${halloweenLevel.toUpperCase()} 666 ]
                                     </div>
                                 </div>
-                                <button onclick="climbyLevel = null; render();" class="text-sm text-purple-600 underline hover:text-purple-800 font-bold">Changer de niveau ou recommencer</button>
+                                <button onclick="halloweenLevel = null; render();" class="text-sm text-orange-400 underline hover:text-orange-300">Changer de niveau ou recommencer</button>
                             </div>
                         `;
                     } else {
@@ -651,45 +455,33 @@
                         html += `
                             <div class="p-4">
                                 <div class="flex justify-between items-center mb-6">
-                                    <button onclick="climbyLevel = null; render();" class="text-xs bg-white text-purple-600 px-3 py-2 rounded-xl font-bold border border-purple-200 hover:bg-purple-50 transition shadow-sm">← Changer de difficulté (${climbyLevel})</button>
+                                    <button onclick="halloweenLevel = null; render();" class="text-xs bg-slate-800 text-orange-400 px-3 py-2 rounded-xl font-bold border border-orange-500/30 hover:bg-slate-700 transition">← Changer de difficulté (${halloweenLevel})</button>
                                 </div>
-                                <div class="bg-gradient-to-r from-purple-600 to-teal-500 text-white rounded-3xl p-6 mb-6 text-center shadow-lg flex flex-col md:flex-row items-center justify-center gap-4">
-                                    <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                                        <i data-lucide="mountain" class="w-8 h-8 text-white"></i>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-2xl font-black mb-1">🏔️ Le Défi de Climby (${climbyLevel})</h2>
-                                        <p class="text-white/90 text-sm">Remplis tous les nombres des ateliers de ce niveau pour valider ton ascension avec le yéti !</p>
-                                    </div>
+                                <div class="bg-gradient-to-r from-orange-900/60 to-purple-950/60 border border-orange-500/30 rounded-3xl p-6 mb-6 text-center shadow-lg">
+                                    <h2 class="text-2xl font-black text-orange-400 mb-2">👻 Le Mystère d'Halloween (${halloweenLevel})</h2>
+                                    <p class="text-slate-300 text-sm">Remplis toutes les cases des nombres cachés pour les ateliers de ce niveau, puis clique sur vérifier !</p>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
                         `;
 
                         currentAteliers.forEach(atelier => {
-                            const val = climbyInputs[atelier.id] !== undefined ? climbyInputs[atelier.id] : '';
-                            const status = climbyStatus[atelier.id];
-                            let borderClass = 'border-gray-200 bg-white';
+                            const val = halloweenInputs[atelier.id] !== undefined ? halloweenInputs[atelier.id] : '';
+                            const status = halloweenStatus[atelier.id];
+                            let borderClass = 'border-slate-800';
                             let shakeClass = '';
 
-                            if (status === 'correct') {
-                                borderClass = 'border-teal-500 bg-teal-50';
-                            } else if (status === 'error') {
-                                borderClass = 'border-red-500 bg-red-50';
-                                shakeClass = 'shake-error';
-                            }
+                            if (status === 'correct') { borderClass = 'border-emerald-500 bg-emerald-950/20'; } 
+                            else if (status === 'error') { borderClass = 'border-red-500 bg-red-950/20'; shakeClass = 'shake-error'; }
 
                             html += `
-                                <div class="border ${borderClass} rounded-2xl p-4 flex flex-col justify-between shadow-sm ${shakeClass}">
+                                <div class="bg-slate-900 border ${borderClass} rounded-2xl p-4 flex flex-col justify-between shadow-md ${shakeClass}">
                                     <div>
-                                        <div class="h-24 rounded-xl overflow-hidden relative mb-3">
-                                            ${atelier.preview}
-                                            <div class="absolute inset-0 bg-black/20"></div>
-                                        </div>
-                                        <h3 class="text-gray-800 font-bold text-sm mb-3">${atelier.name}</h3>
+                                        <div class="h-24 rounded-xl overflow-hidden relative mb-3">${atelier.preview}<div class="absolute inset-0 bg-black/30"></div></div>
+                                        <h3 class="text-slate-100 font-bold text-sm mb-3">${atelier.name}</h3>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <input type="number" placeholder="Nombre..." value="${val}" oninput="handleClimbyInput('${atelier.id}', this.value)" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-800 font-bold text-center text-sm outline-none focus:border-purple-500" />
-                                        ${status === 'correct' ? '<span class="text-teal-600 font-bold text-lg">✓</span>' : status === 'error' ? '<span class="text-red-500 font-bold text-lg">✗</span>' : ''}
+                                        <input type="number" placeholder="Nombre..." value="${val}" oninput="handleHalloweenInput('${atelier.id}', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-center text-sm outline-none focus:border-orange-500" />
+                                        ${status === 'correct' ? '<span class="text-emerald-400 font-bold text-lg">✓</span>' : status === 'error' ? '<span class="text-red-500 font-bold text-lg">✗</span>' : ''}
                                     </div>
                                 </div>
                             `;
@@ -698,7 +490,7 @@
                         html += `
                                 </div>
                                 <div class="flex justify-center pb-8">
-                                    <button id="verifyBtn" onclick="verifyClimbyAnswers()" ${!filled ? 'disabled' : ''} class="px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 ${filled ? 'bg-purple-600 text-white shadow-purple-900/30 hover:bg-purple-500 cursor-pointer active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'}">
+                                    <button id="verifyBtn" onclick="verifyHalloweenAnswers()" ${!filled ? 'disabled' : ''} class="px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center gap-3 ${filled ? 'bg-orange-600 text-white shadow-orange-900/50 hover:bg-orange-500 cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'}">
                                         <i data-lucide="check-circle" class="w-6 h-6"></i> Vérifier mes réponses
                                     </button>
                                 </div>
@@ -707,12 +499,14 @@
                     }
                 } 
                 else {
-                    // Classement global basé sur l'appareil (device_id)
-                    const rankedUsers = globalLeaderboardData.map((p, i) => ({
-                        ...p,
-                        rank: i + 1,
-                        isCurrent: p.deviceId === deviceId
-                    }));
+                    // Construction dynamique du classement
+                    const usersScores = allUsersData.map(u => {
+                        const scores = calculateUserScores(u.completedDefis || {});
+                        return { pseudo: u.pseudo, daily: scores.daily, weekly: scores.weekly, isCurrent: u.id === userId };
+                    });
+
+                    const dbJour = usersScores.filter(u => u.daily > 0).sort((a,b) => b.daily - a.daily).map((u, i) => ({...u, rank: i+1, score: u.daily}));
+                    const dbSemaine = usersScores.filter(u => u.weekly > 0).sort((a,b) => b.weekly - a.weekly).map((u, i) => ({...u, rank: i+1, score: u.weekly}));
 
                     const buildTable = (data, title, subtitle, bgColor) => `
                         <div class="flex-1 bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100">
@@ -720,12 +514,13 @@
                                 <h2 class="text-2xl font-black mb-1">${title}</h2>
                                 <p class="text-white/80 text-sm opacity-80">${subtitle}</p>
                             </div>
-                            <div class="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
-                                ${data.length === 0 ? '<p class="p-6 text-center text-gray-400">Aucun participant pour le moment.</p>' : data.map(p => `
+                            <div class="divide-y divide-gray-50">
+                                ${data.length === 0 ? `<div class="p-8 text-center text-gray-400 font-bold">Aucun score pour le moment !</div>` : ''}
+                                ${data.map(p => `
                                     <div class="flex items-center p-4 ${p.isCurrent ? 'bg-purple-50' : 'hover:bg-gray-50'}">
                                         <div class="w-8 font-black text-lg ${p.rank === 1 ? 'text-yellow-500' : p.rank === 2 ? 'text-gray-400' : p.rank === 3 ? 'text-orange-500' : 'text-gray-300'}">#${p.rank}</div>
                                         <div class="flex-1 font-bold ${p.isCurrent ? 'text-purple-700' : 'text-gray-700'}">
-                                            ${p.pseudo || 'Anonyme'} ${p.isCurrent ? `<span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>` : ''}
+                                            ${p.pseudo} ${p.isCurrent ? `<span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>` : ''}
                                         </div>
                                         <div class="font-black ${bgColor.includes('purple') ? 'text-purple-600 bg-purple-100' : 'text-teal-600 bg-teal-100'} px-3 py-1 rounded-full text-sm">${p.score} pts</div>
                                     </div>
@@ -737,9 +532,11 @@
                     html += `
                         <div class="p-4 flex flex-col md:flex-row gap-6">
                             <div class="flex bg-gray-200 rounded-xl p-1 md:hidden mb-4">
-                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Global</button>
+                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Aujourd'hui</button>
+                                <button onclick="changeLeaderboardTab('semaine')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'semaine' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Cette Semaine</button>
                             </div>
-                            <div class="flex-1">${buildTable(rankedUsers, "Classement Général", "Scores synchronisés de la base de données", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
+                            <div class="${leaderboardTab !== 'jour' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(dbJour, "Top du Jour", "Réinitialisation à minuit", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
+                            <div class="${leaderboardTab !== 'semaine' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(dbSemaine, "Top de la Semaine", "Réinitialisation dimanche à minuit", "bg-gradient-to-r from-teal-500 to-teal-400")}</div>
                         </div>
                     `;
                 }
@@ -747,24 +544,23 @@
                 html += `</main>`;
 
                 html += `
-                    <nav class="md:hidden fixed bottom-0 w-full bg-white border-t border-gray-100 flex pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20">
-                        <button onclick="changeTab('carte')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'carte' ? 'text-purple-600 font-bold' : 'text-gray-400'}">
-                            <i data-lucide="map" class="w-6 h-6"></i>
-                            <span class="text-[10px] uppercase tracking-wider">Carte</span>
+                    <nav class="md:hidden fixed bottom-0 w-full ${isHalloween ? 'bg-slate-900 border-t border-orange-500/30' : 'bg-white border-t border-gray-100'} flex pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20">
+                        <button onclick="changeTab('carte')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'carte' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
+                            <i data-lucide="map" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Carte</span>
                         </button>
-                        <button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'defi_mois' ? 'text-purple-600 font-bold' : 'text-gray-400'}">
-                            <i data-lucide="sparkles" class="w-6 h-6"></i>
-                            <span class="text-[10px] uppercase tracking-wider">Climby</span>
+                        <button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'defi_mois' ? (isHalloween ? 'text-orange-400 font-black' : 'text-purple-600') : 'text-gray-400'}">
+                            <i data-lucide="ghost" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Halloween</span>
                         </button>
-                        <button onclick="changeTab('classement')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'classement' ? 'text-purple-600 font-bold' : 'text-gray-400'}">
-                            <i data-lucide="medal" class="w-6 h-6"></i>
-                            <span class="text-[10px] uppercase tracking-wider">Classement</span>
+                        <button onclick="changeTab('classement')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'classement' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
+                            <i data-lucide="medal" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Classement</span>
                         </button>
                     </nav>
                 `;
 
                 if (selectedAtelierId) {
                     const atelier = ATELIERS.find(a => a.id === selectedAtelierId);
+                    
+                    // Calcul temporaire du score pour la vue de cet atelier 
                     const atelierScore = atelier.defis.reduce((acc, curr) => acc + (completedDefis[curr.id] ? curr.points : 0), 0);
                     const maxScore = atelier.defis.reduce((acc, curr) => acc + curr.points, 0);
 
@@ -784,8 +580,9 @@
                                     <p class="text-gray-500 font-medium mb-4">Coche les défis que tu as validés pour gagner des points !</p>
                                     ${atelier.defis.map(defi => {
                                         const isDone = completedDefis[defi.id];
+                                        // "active:scale-[0.98]" a été supprimé ici pour enlever l'animation au clic
                                         return `
-                                            <button onclick="toggleDefi('${defi.id}')" class="w-full flex items-center p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${isDone ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50'}">
+                                            <button onclick="toggleDefi('${defi.id}')" class="w-full flex items-center p-4 rounded-2xl border-2 text-left transition-all ${isDone ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50'}">
                                                 <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isDone ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 bg-gray-50'}">
                                                     ${isDone ? `<i data-lucide="check" class="w-3.5 h-3.5"></i>` : ''}
                                                 </div>
@@ -809,13 +606,35 @@
                 app.innerHTML = html;
             }
 
-            lucide.createIcons();
+            if (window.lucide) { lucide.createIcons(); }
         }
 
-        // Lancement initial au chargement du script si pas géré par le module
-        if (!isLogged) {
-            render();
+        // --- CYCLE DE VIE (INIT & ÉCOUTE FIREBASE) ---
+        async function initApp() {
+            render(); // Rendu optimiste direct 
+            
+            if (isLogged) {
+                // 1. On récupère les points personnels au F5
+                const userDoc = await getDoc(doc(db, "users", userId));
+                if (userDoc.exists()) {
+                    completedDefis = userDoc.data().completedDefis || {};
+                    render(); // Rafraîchissement avec les vraies données
+                }
+            }
+            
+            // 2. Écoute permanente pour le classement en temps réel
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                allUsersData = [];
+                snapshot.forEach((doc) => {
+                    allUsersData.push({ id: doc.id, ...doc.data() });
+                });
+                if (currentTab === 'classement') {
+                    render();
+                }
+            });
         }
+
+        initApp();
     </script>
 </body>
 </html>
