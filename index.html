@@ -123,7 +123,7 @@
             {
                 id: 'dinosaures', name: 'Les dinosaures',
                 defis: [{ id: 'di1', text: 'Utiliser que jaunes et vertes', points: 5 }, { id: 'di2', text: 'Utiliser que oranges et violettes', points: 10 }, { id: 'di3', text: 'Utiliser que bleues', points: 20 }],
-                preview: `<div class="absolute inset-0 bg-white w-full h-full border-x-8 border-blue-500 flex flex-col items-center justify-around py-2"><span class="text-xs font-bold text-green-600">🦖 Dino</span><span class="text-xs font-bold text-purple-600">🦕 Dino</span><span class="text-xs font-bold text-yellow-500">🦖 Dino</span></div>`
+                preview: `<div class="absolute inset-0 bg-[#f8fafc] w-full h-full border-x-8 border-blue-500 relative overflow-hidden"><div class="absolute top-1 left-1 text-2xl transform -scale-x-100 drop-shadow-sm">🦖</div><div class="absolute top-7 right-1 text-xl drop-shadow-sm">🦕</div><div class="absolute top-1/2 left-3 text-[22px] drop-shadow-sm">🦖</div><div class="absolute bottom-3 right-1 text-2xl transform -scale-x-100 drop-shadow-sm">🦕</div><div class="absolute bottom-1 left-2 text-lg drop-shadow-sm">🦖</div><div class="absolute top-1/3 right-6 text-sm drop-shadow-sm">🦕</div></div>`
             },
             {
                 id: 'tuyaux', name: 'Les tuyaux',
@@ -174,15 +174,16 @@
         
         let userId = localStorage.getItem('climbup_userid');
         if (!userId) {
-            // Création d'un identifiant unique (plusieurs peuvent avoir le même pseudo)
             userId = 'user_' + Date.now().toString(36) + Math.random().toString(36).substring(2);
             localStorage.setItem('climbup_userid', userId);
         }
 
+        // Chargement instantané des points en mémoire locale (anti-perte au F5)
+        let completedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
+        
         let currentTab = 'carte'; 
         let leaderboardTab = 'jour';
         let selectedAtelierId = null;
-        let completedDefis = {};
         let allUsersData = [];
         
         let halloweenLevel = null; 
@@ -198,7 +199,6 @@
         function getStartOfWeek() {
             const now = new Date();
             const day = now.getDay();
-            // Lundi comme premier jour de la semaine
             const diff = now.getDate() - day + (day === 0 ? -6 : 1);
             return new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0).getTime();
         }
@@ -231,12 +231,14 @@
                 localStorage.setItem('climbup_pseudo', pseudo);
                 isLogged = true;
                 
-                // Enregistrement dans Firebase
-                setDoc(doc(db, "users", userId), {
-                    pseudo: pseudo,
-                    completedDefis: completedDefis,
-                    lastUpdated: Date.now()
-                }, { merge: true }).catch(console.error);
+                // Envoi Firebase (avec catch silencieux si les règles Firestore bloquent)
+                try {
+                    setDoc(doc(db, "users", userId), {
+                        pseudo: pseudo,
+                        completedDefis: completedDefis,
+                        lastUpdated: Date.now()
+                    }, { merge: true }).catch(err => console.warn("Erreur de sauvegarde Firebase :", err));
+                } catch(e) {}
 
                 render();
             }
@@ -246,15 +248,20 @@
             if (completedDefis[defiId]) {
                 delete completedDefis[defiId];
             } else {
-                completedDefis[defiId] = Date.now(); // On stocke le moment où c'est coché pour le reset auto !
+                completedDefis[defiId] = Date.now(); 
             }
+            
+            // SAUVEGARDE LOCALE INSTANTANÉE (Évite la perte au F5)
+            localStorage.setItem('climbup_defis', JSON.stringify(completedDefis));
             render();
             
             // Mise à jour de Firebase en arrière-plan
-            setDoc(doc(db, "users", userId), {
-                completedDefis: completedDefis,
-                lastUpdated: Date.now()
-            }, { merge: true }).catch(console.error);
+            try {
+                setDoc(doc(db, "users", userId), {
+                    completedDefis: completedDefis,
+                    lastUpdated: Date.now()
+                }, { merge: true }).catch(err => console.warn("Erreur de sauvegarde Firebase :", err));
+            } catch(e) {}
         };
 
         window.openModal = id => { selectedAtelierId = id; render(); };
@@ -499,8 +506,20 @@
                     }
                 } 
                 else {
+                    // INTÉGRATION LOCALE GARANTIE : On s'ajoute toujours soi-même au classement, même si la base Firebase est injoignable
+                    let usersList = [...allUsersData];
+                    if (isLogged) {
+                        const myIndex = usersList.findIndex(u => u.id === userId);
+                        if (myIndex >= 0) {
+                            usersList[myIndex].completedDefis = completedDefis;
+                            usersList[myIndex].pseudo = pseudo;
+                        } else {
+                            usersList.push({ id: userId, pseudo: pseudo, completedDefis: completedDefis });
+                        }
+                    }
+
                     // Construction dynamique du classement
-                    const usersScores = allUsersData.map(u => {
+                    const usersScores = usersList.map(u => {
                         const scores = calculateUserScores(u.completedDefis || {});
                         return { pseudo: u.pseudo, daily: scores.daily, weekly: scores.weekly, isCurrent: u.id === userId };
                     });
@@ -560,7 +579,6 @@
                 if (selectedAtelierId) {
                     const atelier = ATELIERS.find(a => a.id === selectedAtelierId);
                     
-                    // Calcul temporaire du score pour la vue de cet atelier 
                     const atelierScore = atelier.defis.reduce((acc, curr) => acc + (completedDefis[curr.id] ? curr.points : 0), 0);
                     const maxScore = atelier.defis.reduce((acc, curr) => acc + curr.points, 0);
 
@@ -580,7 +598,6 @@
                                     <p class="text-gray-500 font-medium mb-4">Coche les défis que tu as validés pour gagner des points !</p>
                                     ${atelier.defis.map(defi => {
                                         const isDone = completedDefis[defi.id];
-                                        // "active:scale-[0.98]" a été supprimé ici pour enlever l'animation au clic
                                         return `
                                             <button onclick="toggleDefi('${defi.id}')" class="w-full flex items-center p-4 rounded-2xl border-2 text-left transition-all ${isDone ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50'}">
                                                 <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isDone ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 bg-gray-50'}">
@@ -611,27 +628,24 @@
 
         // --- CYCLE DE VIE (INIT & ÉCOUTE FIREBASE) ---
         async function initApp() {
-            render(); // Rendu optimiste direct 
+            render(); 
             
-            if (isLogged) {
-                // 1. On récupère les points personnels au F5
-                const userDoc = await getDoc(doc(db, "users", userId));
-                if (userDoc.exists()) {
-                    completedDefis = userDoc.data().completedDefis || {};
-                    render(); // Rafraîchissement avec les vraies données
-                }
-            }
-            
-            // 2. Écoute permanente pour le classement en temps réel
-            onSnapshot(collection(db, "users"), (snapshot) => {
-                allUsersData = [];
-                snapshot.forEach((doc) => {
-                    allUsersData.push({ id: doc.id, ...doc.data() });
+            // Écoute permanente pour le classement en temps réel
+            try {
+                onSnapshot(collection(db, "users"), (snapshot) => {
+                    allUsersData = [];
+                    snapshot.forEach((doc) => {
+                        allUsersData.push({ id: doc.id, ...doc.data() });
+                    });
+                    if (currentTab === 'classement') {
+                        render();
+                    }
+                }, (error) => {
+                    console.warn("L'écoute du classement a échoué (vérifiez vos règles Firebase) :", error);
                 });
-                if (currentTab === 'classement') {
-                    render();
-                }
-            });
+            } catch (e) {
+                console.warn("Firebase non disponible, fonctionnement hors-ligne actif.");
+            }
         }
 
         initApp();
