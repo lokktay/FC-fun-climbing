@@ -31,6 +31,14 @@
             animation: shake 0.4s ease-in-out;
         }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .challenge-color-option input:checked + span {
+            outline: 3px solid #334155;
+            outline-offset: 3px;
+            transform: scale(1.12);
+        }
+        .challenge-color-option input:focus-visible + span {
+            box-shadow: 0 0 0 3px white, 0 0 0 5px #64748b;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased select-none transition-colors duration-500">
@@ -40,7 +48,8 @@
     <script type="module">
         // --- INITIALISATION FIREBASE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCAzdG02k6xz_cjZlO7mHvgE4Qtm48ZJZs",
@@ -54,6 +63,7 @@
 
         const fireApp = initializeApp(firebaseConfig);
         const db = getFirestore(fireApp);
+        const auth = getAuth(fireApp);
 
         // --- DONNÉES DES ATELIERS & RÉPONSES DU DÉFI D'HALLOWEEN ---
         const REPONSES_HALLOWEEN = {
@@ -161,12 +171,174 @@
                 preview: `<div class="absolute inset-0 bg-slate-900 w-full h-full flex flex-col justify-between py-1 px-3"><div class="w-full h-2 bg-red-500 transform -rotate-3"></div><div class="w-full h-2 bg-yellow-400 transform rotate-3"></div><div class="w-full h-2 bg-green-500 transform -rotate-2"></div><div class="w-full h-2 bg-blue-500 transform rotate-2"></div><div class="w-full h-2 bg-teal-400 transform -rotate-3"></div><div class="w-full h-2 bg-purple-600 transform rotate-3"></div><div class="w-full h-2 bg-pink-500 transform -rotate-2"></div></div>`
             }
         ];
-
         const DIFF_GROUPES = {
             'facile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade'],
             'moyen': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin'],
             'difficile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin', 'haricot', 'chrono_gauche', 'diedre', 'tuyaux', 'planetes', 'engrenage', 'chrono_droit']
         };
+        const LEVEL_KEYS = ['facile', 'moyen', 'difficile'];
+        const CHALLENGE_COLORS = {
+            lavender: { label: 'Lavande', swatch: 'bg-violet-200', card: 'border-violet-200 bg-violet-50/90 text-violet-900', progress: 'bg-violet-300', completed: 'bg-violet-400', reward: 'bg-violet-100 text-violet-800' },
+            mint: { label: 'Menthe', swatch: 'bg-emerald-200', card: 'border-emerald-200 bg-emerald-50/90 text-emerald-900', progress: 'bg-emerald-300', completed: 'bg-emerald-400', reward: 'bg-emerald-100 text-emerald-800' },
+            peach: { label: 'Pêche', swatch: 'bg-orange-200', card: 'border-orange-200 bg-orange-50/90 text-orange-900', progress: 'bg-orange-300', completed: 'bg-orange-400', reward: 'bg-orange-100 text-orange-800' },
+            sky: { label: 'Bleu ciel', swatch: 'bg-sky-200', card: 'border-sky-200 bg-sky-50/90 text-sky-900', progress: 'bg-sky-300', completed: 'bg-sky-400', reward: 'bg-sky-100 text-sky-800' },
+            rose: { label: 'Rose poudré', swatch: 'bg-rose-200', card: 'border-rose-200 bg-rose-50/90 text-rose-900', progress: 'bg-rose-300', completed: 'bg-rose-400', reward: 'bg-rose-100 text-rose-800' },
+            butter: { label: 'Vanille', swatch: 'bg-amber-200', card: 'border-amber-200 bg-amber-50/90 text-amber-900', progress: 'bg-amber-300', completed: 'bg-amber-400', reward: 'bg-amber-100 text-amber-800' }
+        };
+        const EVENT_INFO = {
+            halloween: { label: "Halloween", icon: "ghost", emoji: "🎃" },
+            christmas: { label: "Noël", icon: "snowflake", emoji: "🎄" },
+            easter: { label: "Pâques", icon: "egg", emoji: "🐣" }
+        };
+        const DEFAULT_EVENTS = {
+            halloween: {
+                title: "Le Mystère d'Halloween",
+                description: "Remplis toutes les cases des nombres cachés pour les ateliers de ce niveau, puis clique sur vérifier !",
+                levels: Object.fromEntries(LEVEL_KEYS.map(level => [
+                    level,
+                    DIFF_GROUPES[level].map(atelierId => ({ atelierId, answer: REPONSES_HALLOWEEN[atelierId] }))
+                ]))
+            },
+            christmas: { title: "Le défi de Noël", description: "Les énigmes de Noël seront bientôt disponibles.", levels: { facile: [], moyen: [], difficile: [] } },
+            easter: { title: "Le défi de Pâques", description: "Les énigmes de Pâques seront bientôt disponibles.", levels: { facile: [], moyen: [], difficile: [] } }
+        };
+        const DEFAULT_APP_SETTINGS = {
+            mode: 'halloween',
+            skin: 'halloween',
+            challengeEnabled: true,
+            workshops: {},
+            events: DEFAULT_EVENTS
+        };
+        const VALID_MODES = ['classic', ...Object.keys(EVENT_INFO)];
+        const VALID_SKINS = ['classic', ...Object.keys(EVENT_INFO)];
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[character]);
+        }
+
+        function normalizeAppSettings(rawSettings) {
+            const raw = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
+            const configuredWorkshopIds = Array.isArray(raw.workshopIds)
+                ? raw.workshopIds.filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(id))
+                : ATELIERS.map(atelier => atelier.id);
+            const activeWorkshopIds = new Set(configuredWorkshopIds);
+            ATELIERS.splice(0, ATELIERS.length, ...ATELIERS.filter(atelier => activeWorkshopIds.has(atelier.id)));
+            if (raw.workshops && typeof raw.workshops === 'object') {
+                Object.entries(raw.workshops).forEach(([id, workshop]) => {
+                    if (!activeWorkshopIds.has(id) || ATELIERS.some(atelier => atelier.id === id)) return;
+                    if (!workshop || typeof workshop !== 'object') return;
+                    ATELIERS.push({
+                        id,
+                        name: typeof workshop.name === 'string' && workshop.name.trim() ? workshop.name.trim().slice(0, 80) : 'Nouvel atelier',
+                        defis: [],
+                        preview: '<div class="absolute inset-0 flex items-center justify-center bg-slate-200"><span class="text-4xl">🧗</span></div>'
+                    });
+                });
+            }
+            const settings = {
+                mode: VALID_MODES.includes(raw.mode) ? raw.mode : DEFAULT_APP_SETTINGS.mode,
+                skin: VALID_SKINS.includes(raw.skin) ? raw.skin : DEFAULT_APP_SETTINGS.skin,
+                challengeEnabled: typeof raw.challengeEnabled === 'boolean' ? raw.challengeEnabled : DEFAULT_APP_SETTINGS.challengeEnabled,
+                workshopIds: ATELIERS.map(atelier => atelier.id),
+                workshops: {},
+                events: {}
+            };
+
+            const usedDefiIds = new Set();
+            ATELIERS.forEach(atelier => {
+                const custom = raw.workshops && raw.workshops[atelier.id];
+                if (!custom || typeof custom !== 'object') {
+                    atelier.defis.forEach(defi => usedDefiIds.add(defi.id));
+                    return;
+                }
+                if (typeof custom.name === 'string' && custom.name.trim()) {
+                    atelier.name = custom.name.trim().slice(0, 80);
+                }
+                if (Array.isArray(custom.defis)) {
+                    const normalizedDefis = [];
+                    custom.defis.slice(0, 10).forEach(customDefi => {
+                        if (!customDefi || typeof customDefi.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(customDefi.id)
+                            || usedDefiIds.has(customDefi.id) || typeof customDefi.text !== 'string' || !customDefi.text.trim()) return;
+                        const rewardType = customDefi.rewardType === 'gift' ? 'gift' : 'points';
+                        const points = Number(customDefi.points);
+                        if (rewardType === 'points' && (!Number.isInteger(points) || points < 1 || points > 100)) return;
+                        usedDefiIds.add(customDefi.id);
+                        normalizedDefis.push({
+                            id: customDefi.id,
+                            text: customDefi.text.trim().slice(0, 160),
+                            points: rewardType === 'points' ? points : 0,
+                            color: Object.prototype.hasOwnProperty.call(CHALLENGE_COLORS, customDefi.color) ? customDefi.color : 'lavender',
+                            rewardType,
+                            rewardText: typeof customDefi.rewardText === 'string' ? customDefi.rewardText.trim().slice(0, 80) : ''
+                        });
+                    });
+                    if (normalizedDefis.length) atelier.defis = normalizedDefis;
+                }
+            });
+
+            Object.keys(EVENT_INFO).forEach(eventKey => {
+                const defaultEvent = DEFAULT_EVENTS[eventKey];
+                const custom = raw.events && raw.events[eventKey] && typeof raw.events[eventKey] === 'object'
+                    ? raw.events[eventKey] : {};
+                const event = {
+                    title: typeof custom.title === 'string' && custom.title.trim() ? custom.title.trim().slice(0, 100) : defaultEvent.title,
+                    description: typeof custom.description === 'string' ? custom.description.trim().slice(0, 300) : defaultEvent.description,
+                    levels: {}
+                };
+                LEVEL_KEYS.forEach(level => {
+                    const entries = custom.levels && Array.isArray(custom.levels[level]) ? custom.levels[level] : defaultEvent.levels[level];
+                    event.levels[level] = entries
+                        .filter(entry => entry && ATELIERS.some(atelier => atelier.id === entry.atelierId) && Number.isFinite(Number(entry.answer)))
+                        .slice(0, 30)
+                        .map(entry => ({ atelierId: entry.atelierId, answer: Number(entry.answer) }));
+                });
+                settings.events[eventKey] = event;
+            });
+
+            return settings;
+        }
+
+        function getWorkshopSettings() {
+            return Object.fromEntries(ATELIERS.map(atelier => [atelier.id, {
+                name: atelier.name,
+                defis: atelier.defis.map(({ id, text, points, color, rewardType, rewardText }) => ({
+                    id, text, points, color: color || 'lavender',
+                    rewardType: rewardType || 'points',
+                    rewardText: rewardText || ''
+                }))
+            }]));
+        }
+
+        function getChallengeColor(defi) {
+            return CHALLENGE_COLORS[defi.color] || CHALLENGE_COLORS.lavender;
+        }
+
+        function getChallengeRewardLabel(defi) {
+            return defi.rewardType === 'gift'
+                ? (defi.rewardText || '🎁 Cadeau')
+                : `${defi.points} pts`;
+        }
+
+        function getAppSettingsPayload(settings = appSettings) {
+            return {
+                mode: settings.mode,
+                skin: settings.skin,
+                challengeEnabled: settings.challengeEnabled,
+                workshopIds: ATELIERS.map(atelier => atelier.id),
+                workshops: getWorkshopSettings(),
+                events: settings.events
+            };
+        }
+
+        function getAtelierPreview(atelier) {
+            const imageDataUrl = workshopImages[atelier.id];
+            if (typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image/')) {
+                return `<img src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(atelier.name)}" class="absolute inset-0 h-full w-full object-cover" />`;
+            }
+            return atelier.preview;
+        }
 
         // --- GESTION DE L'IDENTITÉ & ÉTATS ---
         let pseudo = localStorage.getItem('climbup_pseudo') || '';
@@ -181,15 +353,19 @@
         let completedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
         const halloweenStorageKey = `climbup_halloween_progress_${userId}`;
 
-        function loadHalloweenProgress() {
-            const storedProgress = localStorage.getItem(halloweenStorageKey);
+        function getEventProgressStorageKey(mode) {
+            return mode === 'halloween' ? halloweenStorageKey : `climbup_${mode}_progress_${userId}`;
+        }
+
+        function loadHalloweenProgress(storageKey = halloweenStorageKey) {
+            const storedProgress = localStorage.getItem(storageKey);
             if (!storedProgress) return { activeLevel: null, levels: {} };
 
             try {
                 const parsed = JSON.parse(storedProgress);
                 const levels = parsed && parsed.levels && typeof parsed.levels === 'object' ? parsed.levels : {};
                 Object.keys(levels).forEach(level => {
-                    if (!Object.prototype.hasOwnProperty.call(DIFF_GROUPES, level)) {
+                    if (!LEVEL_KEYS.includes(level)) {
                         delete levels[level];
                         return;
                     }
@@ -203,7 +379,7 @@
                     progress.submitted = !!progress.submitted;
                 });
                 return {
-                    activeLevel: Object.prototype.hasOwnProperty.call(DIFF_GROUPES, parsed.activeLevel) ? parsed.activeLevel : null,
+                    activeLevel: LEVEL_KEYS.includes(parsed.activeLevel) ? parsed.activeLevel : null,
                     levels
                 };
             } catch (error) {
@@ -212,12 +388,25 @@
             }
         }
 
-        const savedHalloweenProgress = loadHalloweenProgress();
+        const savedHalloweenProgress = loadHalloweenProgress(getEventProgressStorageKey('halloween'));
         
         let currentTab = 'carte'; 
         let leaderboardTab = 'jour';
         let selectedAtelierId = null;
         let allUsersData = [];
+        let workshopImages = {};
+        let appSettings = normalizeAppSettings(DEFAULT_APP_SETTINGS);
+        let appConfigError = '';
+        let adminUser = null;
+        let adminAuthorized = false;
+        let adminError = '';
+        let adminMessage = '';
+        let adminSelectedWorkshop = ATELIERS[0].id;
+        let adminWorkshopDraft = JSON.parse(JSON.stringify(ATELIERS[0]));
+        let adminSelectedSeason = 'christmas';
+        let adminEventDraft = JSON.parse(JSON.stringify(appSettings.events[adminSelectedSeason]));
+        let adminGateTapCount = 0;
+        let adminGateLastTap = 0;
         
         let halloweenLevel = savedHalloweenProgress.activeLevel;
         let halloweenProgressByLevel = savedHalloweenProgress.levels;
@@ -233,11 +422,511 @@
                     submitted: halloweenSubmitted
                 };
             }
-            localStorage.setItem(halloweenStorageKey, JSON.stringify({
+            localStorage.setItem(getEventProgressStorageKey(appSettings.mode), JSON.stringify({
                 activeLevel: halloweenLevel,
                 levels: halloweenProgressByLevel
             }));
         }
+
+        function applyAppConfiguration(rawConfiguration) {
+            const previousMode = appSettings.mode;
+            const nextMode = rawConfiguration && VALID_MODES.includes(rawConfiguration.mode) ? rawConfiguration.mode : previousMode;
+            if (previousMode !== nextMode) saveHalloweenProgress();
+            appSettings = normalizeAppSettings(rawConfiguration);
+            if (!ATELIERS.some(atelier => atelier.id === adminSelectedWorkshop)) {
+                adminSelectedWorkshop = ATELIERS[0].id;
+            }
+            const selectedWorkshop = ATELIERS.find(atelier => atelier.id === adminSelectedWorkshop) || ATELIERS[0];
+            adminWorkshopDraft = JSON.parse(JSON.stringify(selectedWorkshop));
+            adminEventDraft = JSON.parse(JSON.stringify(appSettings.events[adminSelectedSeason]));
+            appConfigError = '';
+            if (!appSettings.challengeEnabled || appSettings.mode === 'classic') {
+                if (currentTab === 'defi_mois') currentTab = 'carte';
+            }
+            if (previousMode !== appSettings.mode) {
+                const eventProgress = loadHalloweenProgress(getEventProgressStorageKey(appSettings.mode));
+                halloweenLevel = eventProgress.activeLevel;
+                halloweenProgressByLevel = eventProgress.levels;
+                const levelProgress = halloweenLevel && halloweenProgressByLevel[halloweenLevel];
+                halloweenInputs = levelProgress ? levelProgress.inputs : {};
+                halloweenStatus = levelProgress ? levelProgress.status : {};
+                halloweenSubmitted = levelProgress ? levelProgress.submitted : false;
+            }
+        }
+
+        function getCurrentEvent() {
+            return EVENT_INFO[appSettings.mode] ? appSettings.events[appSettings.mode] : null;
+        }
+
+        function getCurrentEventEntries() {
+            const event = getCurrentEvent();
+            return halloweenLevel && event ? event.levels[halloweenLevel] || [] : [];
+        }
+
+        async function savePublicConfiguration(patch) {
+            if (!adminAuthorized || !adminUser) {
+                throw new Error("Accès administrateur requis.");
+            }
+            const payload = { ...getAppSettingsPayload(), ...patch };
+            await setDoc(doc(db, "appConfig", "main"), payload, { merge: true });
+            applyAppConfiguration(payload);
+        }
+
+        window.openAdmin = function() {
+            currentTab = 'admin';
+            adminError = '';
+            adminMessage = '';
+            render();
+        };
+        window.openAdminGate = function() {
+            const now = Date.now();
+            adminGateTapCount = now - adminGateLastTap <= 2000 ? adminGateTapCount + 1 : 1;
+            adminGateLastTap = now;
+            if (adminGateTapCount >= 5) {
+                adminGateTapCount = 0;
+                window.openAdmin();
+            }
+        };
+
+        window.adminLogin = async function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            adminError = '';
+            adminMessage = '';
+            try {
+                const credential = await signInWithEmailAndPassword(auth, String(formData.get('email')).trim(), String(formData.get('password')));
+                const token = await credential.user.getIdTokenResult(true);
+                if (token.claims.admin !== true) {
+                    await signOut(auth);
+                    adminError = "Ce compte n'a pas le rôle administrateur.";
+                    adminAuthorized = false;
+                    adminUser = null;
+                }
+            } catch (error) {
+                console.error("Connexion admin échouée :", error);
+                adminError = "Connexion impossible. Vérifie l'adresse et le mot de passe.";
+            }
+            render();
+        };
+
+        window.adminLogout = async function() {
+            try {
+                await signOut(auth);
+                currentTab = isLogged ? 'carte' : 'admin';
+                adminMessage = '';
+                adminError = '';
+            } catch (error) {
+                console.error("Déconnexion admin échouée :", error);
+                adminError = "La déconnexion n'a pas abouti. Réessaie.";
+            }
+            render();
+        };
+
+        window.saveAdminSettings = async function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const mode = String(formData.get('mode'));
+            const skin = String(formData.get('skin'));
+            if (!VALID_MODES.includes(mode) || !VALID_SKINS.includes(skin)) {
+                adminError = "Choisis un mode et un skin valides.";
+                render();
+                return;
+            }
+            try {
+                await savePublicConfiguration({
+                    mode,
+                    skin,
+                    challengeEnabled: formData.get('challengeEnabled') === 'on'
+                });
+                adminMessage = "Les paramètres de l'application ont été publiés.";
+                adminError = '';
+            } catch (error) {
+                console.error("Enregistrement des paramètres impossible :", error);
+                adminError = "Enregistrement impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.selectAdminWorkshop = function(workshopId) {
+            if (ATELIERS.some(atelier => atelier.id === workshopId)) {
+                syncAdminWorkshopDraftFromForm();
+                adminSelectedWorkshop = workshopId;
+                const workshop = ATELIERS.find(atelier => atelier.id === workshopId);
+                adminWorkshopDraft = JSON.parse(JSON.stringify(workshop));
+                render();
+            }
+        };
+
+        window.addAdminWorkshop = async function() {
+            if (!adminAuthorized || ATELIERS.length >= 100) {
+                adminError = "Impossible d'ajouter un atelier (limite maximale atteinte ou accès admin manquant).";
+                render();
+                return;
+            }
+            const id = `atelier_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+            const defiId = `defi_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+            const atelier = {
+                id,
+                name: 'Nouvel atelier',
+                defis: [{ id: defiId, text: 'Nouveau défi', points: 5, color: 'lavender', rewardType: 'points', rewardText: '' }],
+                preview: '<div class="absolute inset-0 flex items-center justify-center bg-slate-200"><span class="text-4xl">🧗</span></div>'
+            };
+            ATELIERS.push(atelier);
+            adminSelectedWorkshop = id;
+            adminWorkshopDraft = JSON.parse(JSON.stringify(atelier));
+            try {
+                await savePublicConfiguration({
+                    workshopIds: ATELIERS.map(item => item.id),
+                    workshops: getWorkshopSettings()
+                });
+                adminMessage = "Atelier créé. Tu peux modifier son nom, ses défis et sa photo.";
+                adminError = '';
+            } catch (error) {
+                const failedIndex = ATELIERS.findIndex(item => item.id === id);
+                if (failedIndex >= 0) ATELIERS.splice(failedIndex, 1);
+                adminSelectedWorkshop = ATELIERS[0].id;
+                adminWorkshopDraft = JSON.parse(JSON.stringify(ATELIERS[0]));
+                console.error("Création de l'atelier impossible :", error);
+                adminError = "Création impossible. Vérifie les règles Firestore admin.";
+            }
+            render();
+        };
+
+        window.deleteAdminWorkshop = async function() {
+            const atelier = ATELIERS.find(item => item.id === adminSelectedWorkshop);
+            if (!atelier) return;
+            if (ATELIERS.length <= 1) {
+                adminError = "L'application doit conserver au moins un atelier.";
+                render();
+                return;
+            }
+            const confirmed = window.confirm(`Supprimer « ${atelier.name} » et ses défis ? Les validations liées ne compteront plus dans les scores, et ses énigmes saisonnières seront retirées.`);
+            if (!confirmed) return;
+            adminError = '';
+            adminMessage = '';
+            try {
+                const workshops = getWorkshopSettings();
+                delete workshops[atelier.id];
+                const events = JSON.parse(JSON.stringify(appSettings.events));
+                Object.values(events).forEach(event => {
+                    LEVEL_KEYS.forEach(level => {
+                        event.levels[level] = event.levels[level].filter(entry => entry.atelierId !== atelier.id);
+                    });
+                });
+                const workshopIds = ATELIERS.filter(item => item.id !== atelier.id).map(item => item.id);
+                await savePublicConfiguration({ workshops, workshopIds, events });
+                try {
+                    await deleteDoc(doc(db, "workshopImages", atelier.id));
+                    delete workshopImages[atelier.id];
+                } catch (imageError) {
+                    console.error("Suppression de la miniature impossible :", imageError);
+                    adminError = "Atelier supprimé, mais sa miniature n'a pas pu être effacée.";
+                }
+                adminSelectedWorkshop = ATELIERS[0].id;
+                adminWorkshopDraft = JSON.parse(JSON.stringify(ATELIERS[0]));
+                if (!adminError) adminMessage = "Atelier supprimé. Les anciennes validations de ses défis ne sont plus comptées.";
+            } catch (error) {
+                console.error("Suppression de l'atelier impossible :", error);
+                adminError = "Suppression impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        async function compressWorkshopImage(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                throw new Error("Choisis un fichier image valide.");
+            }
+            if (file.size > 20 * 1024 * 1024) {
+                throw new Error("L'image d'origine doit faire moins de 20 Mo.");
+            }
+            const bitmap = await createImageBitmap(file);
+            try {
+                for (const maxDimension of [800, 640, 480, 360]) {
+                    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+                    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+                    const context = canvas.getContext('2d');
+                    if (!context) throw new Error("Le navigateur ne peut pas compresser cette image.");
+                    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                    for (const quality of [0.72, 0.56, 0.4]) {
+                        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+                        if (!blob) throw new Error("La compression de l'image a échoué.");
+                        if (blob.size > 200000) continue;
+                        const dataUrl = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result);
+                            reader.onerror = () => reject(new Error("La lecture de l'image compressée a échoué."));
+                            reader.readAsDataURL(blob);
+                        });
+                        return dataUrl;
+                    }
+                }
+            } finally {
+                bitmap.close();
+            }
+            throw new Error("Cette image reste trop volumineuse après compression. Essaie une image plus petite.");
+        }
+
+        window.uploadWorkshopImage = async function(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            input.disabled = true;
+            try {
+                if (!adminAuthorized) throw new Error("Connexion administrateur requise.");
+                const atelierId = adminSelectedWorkshop;
+                const imageDataUrl = await compressWorkshopImage(file);
+                if (!ATELIERS.some(atelier => atelier.id === atelierId)) {
+                    throw new Error("Cet atelier a été supprimé pendant l'import de l'image.");
+                }
+                await setDoc(doc(db, "workshopImages", atelierId), {
+                    imageDataUrl,
+                    updatedAt: Date.now()
+                });
+                workshopImages[atelierId] = imageDataUrl;
+                adminMessage = "Miniature compressée et enregistrée.";
+                adminError = '';
+            } catch (error) {
+                console.error("Import de la miniature impossible :", error);
+                adminError = error.message || "Import de la miniature impossible. Vérifie les règles Firestore.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.removeWorkshopImage = async function() {
+            if (!adminAuthorized) return;
+            const atelierId = adminSelectedWorkshop;
+            try {
+                await deleteDoc(doc(db, "workshopImages", atelierId));
+                delete workshopImages[atelierId];
+                adminMessage = "La miniature personnalisée a été supprimée.";
+                adminError = '';
+            } catch (error) {
+                console.error("Suppression de la miniature impossible :", error);
+                adminError = "Suppression impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        function syncAdminWorkshopDraftFromForm() {
+            const form = document.querySelector('[data-admin-workshop-form]');
+            if (!form) return;
+            const formData = new FormData(form);
+            const workshop = ATELIERS.find(atelier => atelier.id === String(formData.get('workshopId')));
+            if (!workshop) return;
+            const draftDefis = Array.from(form.querySelectorAll('input[name^="text_"]')).map(textInput => {
+                const id = textInput.name.slice('text_'.length);
+                const pointsInput = form.querySelector(`[name="points_${id}"]`);
+                const colorInput = form.querySelector(`[name="color_${id}"]`);
+                const rewardTypeInput = form.querySelector(`[name="rewardType_${id}"]`);
+                const rewardTextInput = form.querySelector(`[name="rewardText_${id}"]`);
+                return {
+                    id,
+                    text: textInput.value,
+                    points: pointsInput ? Number(pointsInput.value) : NaN,
+                    color: colorInput ? colorInput.value : 'lavender',
+                    rewardType: rewardTypeInput ? rewardTypeInput.value : 'points',
+                    rewardText: rewardTextInput ? rewardTextInput.value : ''
+                };
+            });
+            adminWorkshopDraft = {
+                id: workshop.id,
+                name: String(formData.get('workshopName')),
+                defis: draftDefis
+            };
+        }
+
+        window.addAdminWorkshopChallenge = function() {
+            syncAdminWorkshopDraftFromForm();
+            if (adminWorkshopDraft.defis.length >= 10) {
+                adminError = "Un atelier ne peut pas avoir plus de 10 défis.";
+                render();
+                return;
+            }
+            const id = `${adminWorkshopDraft.id}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+            adminWorkshopDraft.defis.push({ id, text: '', points: 5, color: 'lavender', rewardType: 'points', rewardText: '' });
+            adminError = '';
+            render();
+        };
+
+        window.removeAdminWorkshopChallenge = function(defiId) {
+            syncAdminWorkshopDraftFromForm();
+            if (adminWorkshopDraft.defis.length <= 1) {
+                adminError = "Un atelier doit conserver au moins un défi.";
+                render();
+                return;
+            }
+            adminWorkshopDraft.defis = adminWorkshopDraft.defis.filter(defi => defi.id !== defiId);
+            adminError = '';
+            render();
+        };
+
+        window.toggleAdminRewardFields = function(defiId, rewardType) {
+            const row = document.querySelector(`[data-admin-defi="${defiId}"]`);
+            if (!row) return;
+            const pointsField = row.querySelector('[data-reward-field="points"]');
+            const giftField = row.querySelector('[data-reward-field="gift"]');
+            if (!pointsField || !giftField) return;
+            const isGift = rewardType === 'gift';
+            pointsField.classList.toggle('hidden', isGift);
+            pointsField.classList.toggle('block', !isGift);
+            giftField.classList.toggle('hidden', !isGift);
+            giftField.classList.toggle('block', isGift);
+            pointsField.querySelector('input').disabled = isGift;
+            pointsField.querySelector('input').required = !isGift;
+            giftField.querySelector('input').disabled = !isGift;
+            giftField.querySelector('input').required = isGift;
+        };
+
+        window.saveAdminWorkshop = async function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            syncAdminWorkshopDraftFromForm();
+            const workshop = ATELIERS.find(atelier => atelier.id === String(formData.get('workshopId')));
+            if (!workshop) return;
+            const name = String(formData.get('workshopName')).trim();
+            if (!name || name.length > 80) {
+                adminError = "Le nom de l'atelier doit contenir entre 1 et 80 caractères.";
+                render();
+                return;
+            }
+            try {
+                const updated = getWorkshopSettings();
+                updated[workshop.id] = {
+                    name,
+                    defis: adminWorkshopDraft.defis.map(defi => {
+                        const text = String(formData.get(`text_${defi.id}`)).trim();
+                        const rewardType = String(formData.get(`rewardType_${defi.id}`));
+                        const points = Number(formData.get(`points_${defi.id}`));
+                        const color = String(formData.get(`color_${defi.id}`));
+                        const rewardText = String(formData.get(`rewardText_${defi.id}`) || '').trim();
+                        if (!text || text.length > 160) {
+                            throw new Error("Le texte de chaque défi doit contenir entre 1 et 160 caractères.");
+                        }
+                        if (rewardType === 'points' && (!Number.isInteger(points) || points < 1 || points > 100)) {
+                            throw new Error("Les points doivent être un nombre entier entre 1 et 100.");
+                        }
+                        if (rewardType === 'gift' && (!rewardText || rewardText.length > 80)) {
+                            throw new Error("La récompense cadeau doit contenir entre 1 et 80 caractères.");
+                        }
+                        if (!['points', 'gift'].includes(rewardType) || !Object.prototype.hasOwnProperty.call(CHALLENGE_COLORS, color)) {
+                            throw new Error("Choisis un type de récompense et une couleur valides.");
+                        }
+                        return { id: defi.id, text, points: rewardType === 'gift' ? 0 : points, color, rewardType, rewardText };
+                    })
+                };
+                if (!updated[workshop.id].defis.length || updated[workshop.id].defis.length > 10) {
+                    throw new Error("Un atelier doit comporter entre 1 et 10 défis.");
+                }
+                await savePublicConfiguration({ workshops: updated });
+                adminMessage = "L'atelier et ses défis ont été mis à jour.";
+                adminError = '';
+            } catch (error) {
+                console.error("Enregistrement de l'atelier impossible :", error);
+                adminError = error.message || "Enregistrement de l'atelier impossible.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.selectAdminSeason = function(season) {
+            if (!EVENT_INFO[season]) return;
+            adminSelectedSeason = season;
+            adminEventDraft = JSON.parse(JSON.stringify(appSettings.events[season]));
+            render();
+        };
+
+        window.addAdminEventChallenge = function(level) {
+            if (!LEVEL_KEYS.includes(level) || !adminEventDraft) return;
+            if (adminEventDraft.levels[level].length >= 30) {
+                adminError = "Limite de 30 énigmes par niveau atteinte.";
+                render();
+                return;
+            }
+            syncAdminEventDraftFromForm();
+            adminEventDraft.levels[level].push({ atelierId: ATELIERS[0].id, answer: 0 });
+            render();
+        };
+
+        window.removeAdminEventChallenge = function(level, index) {
+            if (!LEVEL_KEYS.includes(level) || !adminEventDraft) return;
+            syncAdminEventDraftFromForm();
+            adminEventDraft.levels[level].splice(index, 1);
+            render();
+        };
+
+        function syncAdminEventDraftFromForm() {
+            const titleInput = document.querySelector('[name="eventTitle"]');
+            const descriptionInput = document.querySelector('[name="eventDescription"]');
+            if (titleInput) adminEventDraft.title = titleInput.value;
+            if (descriptionInput) adminEventDraft.description = descriptionInput.value;
+            LEVEL_KEYS.forEach(level => {
+                adminEventDraft.levels[level] = adminEventDraft.levels[level].map((entry, index) => {
+                    const atelierInput = document.querySelector(`[name="atelier_${level}_${index}"]`);
+                    const answerInput = document.querySelector(`[name="answer_${level}_${index}"]`);
+                    return {
+                        atelierId: atelierInput ? atelierInput.value : entry.atelierId,
+                        answer: answerInput ? Number(answerInput.value) : entry.answer
+                    };
+                });
+            });
+        }
+
+        window.saveAdminEvent = async function(event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const formData = new FormData(form);
+            syncAdminEventDraftFromForm();
+            const title = String(formData.get('eventTitle')).trim();
+            const description = String(formData.get('eventDescription')).trim();
+            adminEventDraft.title = title;
+            adminEventDraft.description = description;
+            if (!title || title.length > 100 || description.length > 300) {
+                adminError = "Le titre (1 à 100 caractères) et la description (300 caractères maximum) sont requis.";
+                render();
+                return;
+            }
+            const levels = {};
+            for (const level of LEVEL_KEYS) {
+                const existingEntries = adminEventDraft.levels[level];
+                levels[level] = [];
+                const seenWorkshops = new Set();
+                for (let index = 0; index < existingEntries.length; index += 1) {
+                    const atelierId = String(formData.get(`atelier_${level}_${index}`));
+                    const answer = Number(formData.get(`answer_${level}_${index}`));
+                    if (!ATELIERS.some(atelier => atelier.id === atelierId) || !Number.isFinite(answer)) {
+                        adminError = "Chaque énigme doit être associée à un atelier et à une réponse numérique.";
+                        render();
+                        return;
+                    }
+                    if (seenWorkshops.has(atelierId)) {
+                        adminError = "Un même atelier ne peut apparaître qu'une fois par niveau.";
+                        render();
+                        return;
+                    }
+                    seenWorkshops.add(atelierId);
+                    levels[level].push({ atelierId, answer });
+                }
+            }
+            try {
+                const events = {
+                    ...appSettings.events,
+                    [adminSelectedSeason]: { title, description, levels }
+                };
+                await savePublicConfiguration({ events });
+                adminMessage = `Le défi ${EVENT_INFO[adminSelectedSeason].label} a été publié.`;
+                adminError = '';
+            } catch (error) {
+                console.error("Enregistrement du défi saisonnier impossible :", error);
+                adminError = "Enregistrement impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
 
         // --- CALCUL DES SCORES VIA TIMESTAMP ---
         function getStartOfDay() {
@@ -266,10 +955,11 @@
                 atelier.defis.forEach(defi => {
                     const timestamp = defis[defi.id];
                     if (timestamp) {
-                        total += defi.points;
-                        if (timestamp >= startOfDay) daily += defi.points;
-                        if (timestamp >= startOfWeek) weekly += defi.points;
-                        if (timestamp >= startOfMonth) monthly += defi.points;
+                        const points = defi.rewardType === 'gift' ? 0 : defi.points;
+                        total += points;
+                        if (timestamp >= startOfDay) daily += points;
+                        if (timestamp >= startOfWeek) weekly += points;
+                        if (timestamp >= startOfMonth) monthly += points;
                     }
                 });
             });
@@ -320,12 +1010,15 @@
         window.openModal = id => { selectedAtelierId = id; render(); };
         window.closeModal = () => { selectedAtelierId = null; render(); };
         window.changeTab = tab => { 
+            if (tab === 'defi_mois' && (!appSettings.challengeEnabled || appSettings.mode === 'classic')) return;
             currentTab = tab; 
             render(); 
         };
         window.changeLeaderboardTab = tab => { leaderboardTab = tab; render(); };
 
         window.selectHalloweenLevel = lvl => {
+            const event = getCurrentEvent();
+            if (!LEVEL_KEYS.includes(lvl) || !event || !event.levels[lvl].length) return;
             halloweenLevel = lvl;
             const savedProgress = halloweenProgressByLevel[lvl];
             halloweenInputs = savedProgress ? savedProgress.inputs : {};
@@ -361,8 +1054,8 @@
         };
 
         function getActiveAteliersForLevel() {
-            if (!halloweenLevel) return [];
-            return ATELIERS.filter(a => DIFF_GROUPES[halloweenLevel].includes(a.id));
+            const activeEntries = getCurrentEventEntries();
+            return ATELIERS.filter(atelier => activeEntries.some(entry => entry.atelierId === atelier.id));
         }
 
         function areAllFilled() {
@@ -375,16 +1068,14 @@
         }
 
         window.verifyHalloweenAnswers = function() {
-            const currentAteliers = getActiveAteliersForLevel();
-            let allCorrect = true;
+            const entries = getCurrentEventEntries();
             halloweenStatus = {};
 
-            currentAteliers.forEach(atelier => {
-                if (Number(halloweenInputs[atelier.id]) === Number(REPONSES_HALLOWEEN[atelier.id])) {
-                    halloweenStatus[atelier.id] = 'correct';
+            entries.forEach(entry => {
+                if (Number(halloweenInputs[entry.atelierId]) === entry.answer) {
+                    halloweenStatus[entry.atelierId] = 'correct';
                 } else {
-                    halloweenStatus[atelier.id] = 'error';
-                    allCorrect = false;
+                    halloweenStatus[entry.atelierId] = 'error';
                 }
             });
             halloweenSubmitted = true;
@@ -392,24 +1083,243 @@
             render();
         };
 
-        function isHalloweenCompleted() {
-            if (!halloweenLevel || !halloweenSubmitted) return false;
-            return getActiveAteliersForLevel().every(a => Number(halloweenInputs[a.id]) === Number(REPONSES_HALLOWEEN[a.id]));
+        function isCurrentEventCompleted() {
+            const entries = getCurrentEventEntries();
+            if (!halloweenLevel || !halloweenSubmitted || entries.length === 0) return false;
+            return entries.every(entry => Number(halloweenInputs[entry.atelierId]) === entry.answer);
+        }
+
+        function renderAdminPanel() {
+            const notice = adminError
+                ? `<div role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">${escapeHtml(adminError)}</div>`
+                : adminMessage
+                    ? `<div role="status" class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-bold text-emerald-700">${escapeHtml(adminMessage)}</div>`
+                    : '';
+
+            if (!adminUser || !adminAuthorized) {
+                return `
+                    <section class="mx-auto max-w-lg p-4 py-10">
+                        <div class="rounded-3xl bg-white p-8 shadow-lg">
+                            <div class="mb-4 flex items-center justify-center"><i data-lucide="shield" class="h-10 w-10 text-purple-600"></i></div>
+                            <h1 class="mb-2 text-center text-2xl font-black">Espace administrateur</h1>
+                            <p class="mb-6 text-center text-gray-500">La connexion admin est séparée de l'accès rapide des joueurs.</p>
+                            ${notice}
+                            <form onsubmit="adminLogin(event)" class="space-y-4">
+                                <label class="block text-sm font-bold text-gray-600">Adresse e-mail
+                                    <input name="email" type="email" autocomplete="username" required class="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-purple-500" />
+                                </label>
+                                <label class="block text-sm font-bold text-gray-600">Mot de passe
+                                    <input name="password" type="password" autocomplete="current-password" required class="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-purple-500" />
+                                </label>
+                                <button type="submit" class="w-full rounded-xl bg-purple-600 px-4 py-3 font-black text-white hover:bg-purple-700">Se connecter</button>
+                            </form>
+                            <p class="mt-4 text-center text-xs text-gray-400">Les joueurs n'ont pas besoin de compte pour utiliser l'application.</p>
+                        </div>
+                    </section>
+                `;
+            }
+
+            const participantCount = allUsersData.length;
+            const scores = allUsersData.map(user => calculateUserScores(user.completedDefis || {}).total);
+            const averageScore = scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
+            const totalDefis = ATELIERS.reduce((total, atelier) => total + atelier.defis.length, 0);
+            const completions = allUsersData.reduce((total, user) => {
+                const done = user.completedDefis || {};
+                return total + ATELIERS.reduce((count, atelier) => count + atelier.defis.filter(defi => !!done[defi.id]).length, 0);
+            }, 0);
+            const completionRate = participantCount && totalDefis
+                ? Math.round(completions / (participantCount * totalDefis) * 100)
+                : 0;
+            const selectedWorkshop = adminWorkshopDraft.id === adminSelectedWorkshop
+                ? adminWorkshopDraft
+                : ATELIERS.find(atelier => atelier.id === adminSelectedWorkshop) || ATELIERS[0];
+            const selectedEvent = appSettings.events[adminSelectedSeason];
+            const eventOptions = Object.keys(EVENT_INFO).map(key =>
+                `<option value="${key}" ${key === adminSelectedSeason ? 'selected' : ''}>${EVENT_INFO[key].label}</option>`
+            ).join('');
+            const workshopOptions = ATELIERS.map(atelier =>
+                `<option value="${atelier.id}" ${atelier.id === selectedWorkshop.id ? 'selected' : ''}>${escapeHtml(atelier.name)}</option>`
+            ).join('');
+            const modeOptions = VALID_MODES.map(mode => {
+                const label = mode === 'classic' ? 'Classique (sans défi saisonnier)' : EVENT_INFO[mode].label;
+                return `<option value="${mode}" ${appSettings.mode === mode ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+            const skinOptions = VALID_SKINS.map(skin => {
+                const label = skin === 'classic' ? 'Classique' : EVENT_INFO[skin].label;
+                return `<option value="${skin}" ${appSettings.skin === skin ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+            const challengeStats = ATELIERS.flatMap(atelier => atelier.defis.map(defi => {
+                const completedCount = allUsersData.filter(user => !!(user.completedDefis || {})[defi.id]).length;
+                const rate = participantCount ? Math.round(completedCount / participantCount * 100) : 0;
+                return `
+                    <div class="flex items-center gap-3 border-b border-gray-100 py-3 last:border-0">
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate font-bold text-gray-800">${escapeHtml(atelier.name)} · ${escapeHtml(defi.text)}</p>
+                            <p class="text-xs text-gray-500">${completedCount} validation(s) / ${participantCount} profil(s)</p>
+                        </div>
+                        <div class="font-black text-purple-700">${rate}%</div>
+                    </div>
+                `;
+            })).join('');
+            const eventChallengeRows = LEVEL_KEYS.map(level => {
+                const entries = adminEventDraft.levels[level] || [];
+                return `
+                    <section class="rounded-2xl border border-gray-200 p-4">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h3 class="font-black capitalize">${level}</h3>
+                            <button type="button" onclick="addAdminEventChallenge('${level}')" class="rounded-lg bg-purple-50 px-3 py-2 text-sm font-bold text-purple-700">+ Ajouter une énigme</button>
+                        </div>
+                        ${entries.length ? entries.map((entry, index) => `
+                            <div class="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_140px_auto]">
+                                <select name="atelier_${level}_${index}" class="min-w-0 rounded-lg border border-gray-200 px-3 py-2">
+                                    ${ATELIERS.map(atelier => `<option value="${atelier.id}" ${entry.atelierId === atelier.id ? 'selected' : ''}>${escapeHtml(atelier.name)}</option>`).join('')}
+                                </select>
+                                <input name="answer_${level}_${index}" type="number" step="any" value="${escapeHtml(entry.answer)}" required aria-label="Réponse attendue" class="rounded-lg border border-gray-200 px-3 py-2" />
+                                <button type="button" onclick="removeAdminEventChallenge('${level}', ${index})" aria-label="Supprimer l'énigme" class="rounded-lg bg-red-50 px-3 py-2 font-bold text-red-700">Supprimer</button>
+                            </div>
+                        `).join('') : '<p class="text-sm text-gray-400">Aucune énigme configurée pour ce niveau.</p>'}
+                    </section>
+                `;
+            }).join('');
+
+            return `
+                <section class="space-y-6 p-4 pb-10">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div><h1 class="text-3xl font-black">Administration</h1><p class="text-sm text-gray-500">${escapeHtml(adminUser.email || '')}</p></div>
+                        <button onclick="adminLogout()" class="rounded-xl border border-gray-200 bg-white px-4 py-2 font-bold text-gray-700">Déconnexion admin</button>
+                    </div>
+                    ${notice}
+                    ${appConfigError ? `<div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-800">${escapeHtml(appConfigError)}</div>` : ''}
+
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Profils participants</p><p class="mt-2 text-3xl font-black">${participantCount}</p></article>
+                        <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Score moyen</p><p class="mt-2 text-3xl font-black">${averageScore} pts</p></article>
+                        <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Défis validés / possibilités</p><p class="mt-2 text-3xl font-black">${completionRate}%</p></article>
+                    </div>
+                    <p class="text-xs text-gray-500">Les statistiques comptent les profils enregistrés dans Firestore ; un même joueur peut avoir plusieurs profils sur différents appareils.</p>
+
+                    <form onsubmit="saveAdminSettings(event)" class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+                        <h2 class="text-xl font-black">Mode et apparence</h2>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <label class="text-sm font-bold text-gray-600">Mode de l'application
+                                <select name="mode" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${modeOptions}</select>
+                            </label>
+                            <label class="text-sm font-bold text-gray-600">Skin visuel
+                                <select name="skin" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${skinOptions}</select>
+                            </label>
+                        </div>
+                        <label class="flex items-center gap-3 font-bold"><input name="challengeEnabled" type="checkbox" ${appSettings.challengeEnabled ? 'checked' : ''} class="h-5 w-5 accent-purple-600" /> Activer le défi saisonnier</label>
+                        <button class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Publier les paramètres</button>
+                    </form>
+
+                    <div class="grid gap-6 xl:grid-cols-2">
+                        <div class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div><h2 class="text-xl font-black">Personnaliser un atelier</h2><p class="text-sm text-gray-500">Les identifiants restent fixes pour conserver les validations. Modifier les points recalcule aussi les scores déjà enregistrés. Supprimer un défi retire ses validations des scores.</p></div>
+                                <button type="button" onclick="addAdminWorkshop()" class="shrink-0 rounded-xl bg-purple-50 px-4 py-2 font-bold text-purple-700">+ Ajouter un atelier</button>
+                            </div>
+                            <label class="block text-sm font-bold text-gray-600">Atelier
+                                <select onchange="selectAdminWorkshop(this.value)" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${workshopOptions}</select>
+                            </label>
+                            <div class="overflow-hidden rounded-xl border border-gray-200">
+                                <div class="relative h-36 bg-gray-100">${getAtelierPreview(selectedWorkshop)}</div>
+                                <div class="space-y-3 p-3">
+                                    <label class="block text-sm font-bold text-gray-700">Image miniature
+                                        <input type="file" accept="image/*" onchange="uploadWorkshopImage(this)" class="mt-2 block w-full text-sm font-medium text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-purple-50 file:px-3 file:py-2 file:font-bold file:text-purple-700" />
+                                    </label>
+                                    <p class="text-xs text-gray-500">L'image est redimensionnée et compressée avant son enregistrement. Fichier d'origine : 20 Mo maximum.</p>
+                                    ${workshopImages[selectedWorkshop.id] ? '<button type="button" onclick="removeWorkshopImage()" class="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Supprimer la miniature personnalisée</button>' : ''}
+                                </div>
+                            </div>
+                            <form data-admin-workshop-form onsubmit="saveAdminWorkshop(event)" class="space-y-3">
+                                <input type="hidden" name="workshopId" value="${selectedWorkshop.id}" />
+                                <label class="block text-sm font-bold text-gray-600">Nom
+                                    <input name="workshopName" maxlength="80" required value="${escapeHtml(selectedWorkshop.name)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3" />
+                                </label>
+                                ${selectedWorkshop.defis.map(defi => `
+                                    <div data-admin-defi="${defi.id}" class="space-y-3 rounded-xl bg-gray-50 p-3">
+                                        <div class="flex items-start gap-2">
+                                            <label class="min-w-0 flex-1 text-xs font-bold text-gray-500">Texte du défi
+                                                <input name="text_${defi.id}" maxlength="160" required value="${escapeHtml(defi.text)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                            </label>
+                                            <button type="button" onclick="removeAdminWorkshopChallenge('${defi.id}')" aria-label="Supprimer le défi" class="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Supprimer</button>
+                                        </div>
+                                        <div class="grid gap-3 sm:grid-cols-2">
+                                            <fieldset class="text-xs font-bold text-gray-500">
+                                                <legend>Couleur pastel</legend>
+                                                <div class="mt-2 flex flex-wrap gap-3">
+                                                    ${Object.entries(CHALLENGE_COLORS).map(([colorKey, color]) => `
+                                                        <label class="challenge-color-option cursor-pointer" title="${color.label}">
+                                                            <input class="sr-only" type="radio" name="color_${defi.id}" value="${colorKey}" aria-label="${color.label}" ${defi.color === colorKey ? 'checked' : ''} />
+                                                            <span class="block h-7 w-7 rounded-full ${color.swatch} transition-transform"></span>
+                                                        </label>
+                                                    `).join('')}
+                                                </div>
+                                            </fieldset>
+                                            <label class="text-xs font-bold text-gray-500">Récompense
+                                                <select name="rewardType_${defi.id}" onchange="toggleAdminRewardFields('${defi.id}', this.value)" class="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                                                    <option value="points" ${defi.rewardType !== 'gift' ? 'selected' : ''}>Points</option>
+                                                    <option value="gift" ${defi.rewardType === 'gift' ? 'selected' : ''}>Cadeau (sans points)</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <label data-reward-field="points" class="${defi.rewardType === 'gift' ? 'hidden' : 'block'} text-xs font-bold text-gray-500">Points attribués
+                                            <input name="points_${defi.id}" type="number" min="1" max="100" step="1" ${defi.rewardType === 'gift' ? 'disabled' : 'required'} value="${defi.points || 5}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                        </label>
+                                        <label data-reward-field="gift" class="${defi.rewardType === 'gift' ? 'block' : 'hidden'} text-xs font-bold text-gray-500">Texte / emoji du cadeau
+                                            <input name="rewardText_${defi.id}" maxlength="80" ${defi.rewardType === 'gift' ? 'required' : 'disabled'} value="${escapeHtml(defi.rewardText || '')}" placeholder="Ex. 🎁 Cadeau surprise" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                        </label>
+                                    </div>
+                                `).join('')}
+                                <button type="button" onclick="addAdminWorkshopChallenge()" class="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 font-bold text-purple-700">+ Ajouter un défi (${selectedWorkshop.defis.length}/10)</button>
+                                <button class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Enregistrer l'atelier</button>
+                            </form>
+                            <button type="button" onclick="deleteAdminWorkshop()" ${ATELIERS.length <= 1 ? 'disabled' : ''} class="rounded-xl border border-red-200 bg-white px-4 py-3 font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-40">Supprimer cet atelier</button>
+                        </div>
+
+                        <form onsubmit="saveAdminEvent(event)" class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+                            <div><h2 class="text-xl font-black">Défis saisonniers</h2><p class="text-sm text-gray-500">Configure les énigmes et leurs réponses attendues pour Noël, Pâques et Halloween.</p></div>
+                            <label class="block text-sm font-bold text-gray-600">Événement
+                                <select onchange="selectAdminSeason(this.value)" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${eventOptions}</select>
+                            </label>
+                            <label class="block text-sm font-bold text-gray-600">Titre
+                                <input name="eventTitle" maxlength="100" required value="${escapeHtml(adminEventDraft.title)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3" />
+                            </label>
+                            <label class="block text-sm font-bold text-gray-600">Consigne
+                                <textarea name="eventDescription" maxlength="300" rows="2" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${escapeHtml(adminEventDraft.description)}</textarea>
+                            </label>
+                            ${eventChallengeRows}
+                            <button class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Enregistrer le défi ${EVENT_INFO[adminSelectedSeason].label}</button>
+                        </form>
+                    </div>
+
+                    <section class="rounded-2xl bg-white p-5 shadow-sm">
+                        <h2 class="mb-2 text-xl font-black">Réussite des défis de la carte</h2>
+                        <p class="mb-3 text-sm text-gray-500">Part des profils participants ayant validé chaque défi au moins une fois.</p>
+                        <div class="max-h-[32rem] overflow-y-auto">${challengeStats || '<p class="py-4 text-gray-400">Aucun défi configuré.</p>'}</div>
+                    </section>
+                </section>
+            `;
         }
 
         // --- RENDU ---
         function render() {
             const app = document.getElementById('app');
-            const isHalloween = (currentTab === 'defi_mois');
+            const activeEventInfo = EVENT_INFO[appSettings.mode];
+            const challengeAvailable = appSettings.challengeEnabled && !!activeEventInfo;
+            const isAdminView = currentTab === 'admin';
+            const skin = isAdminView ? 'classic' : appSettings.skin;
+            const isHalloween = !isAdminView && skin === 'halloween';
+            const isSeasonal = !isAdminView && skin !== 'classic' && !!activeEventInfo;
 
-            if (!isLogged) {
+            if (!isLogged && currentTab !== 'admin') {
                 app.innerHTML = `
                     <div class="min-h-screen bg-gradient-to-br from-purple-600 to-teal-400 flex items-center justify-center p-4">
                         <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl text-center">
                             <div class="w-24 h-24 bg-gradient-to-br from-purple-500 to-teal-400 rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg">
                                 <i data-lucide="trophy" class="text-white w-12 h-12"></i>
                             </div>
-                            <h1 class="text-3xl font-black text-gray-800 mb-2">Climb Up</h1>
+                            <h1 onclick="openAdminGate()" class="text-3xl font-black text-gray-800 mb-2">Climb Up</h1>
                             <p class="text-gray-500 mb-8 font-medium">Fun Climbing - Défis</p>
                             
                             <form onsubmit="handleLogin(event)" class="space-y-4">
@@ -427,24 +1337,29 @@
                 const myScores = calculateUserScores(completedDefis);
                 const totalScore = myScores.total; 
                 
-                let headerBg = isHalloween ? 'bg-slate-900 border-b border-orange-500/30' : 'bg-white shadow-sm';
-                let logoGradient = isHalloween ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-orange-400' : 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-teal-500';
-                let badgeStyle = isHalloween ? 'bg-orange-950 border border-orange-500/50 text-orange-400' : 'bg-purple-100 border border-purple-200 text-purple-700';
+                const themeStyles = {
+                    classic: { page: 'bg-gray-50 text-gray-800', header: 'bg-white shadow-sm', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-teal-500', badge: 'bg-purple-100 border border-purple-200 text-purple-700', icon: 'trophy', accent: 'text-purple-600' },
+                    halloween: { page: 'bg-slate-950 text-slate-100 halloween-transition', header: 'bg-slate-900 border-b border-orange-500/30', logo: 'bg-gradient-to-r from-orange-500 to-purple-600 text-orange-400', badge: 'bg-orange-950 border border-orange-500/50 text-orange-400', icon: 'ghost', accent: 'text-orange-400' },
+                    christmas: { page: 'bg-sky-50 text-slate-800', header: 'bg-white border-b border-red-200 shadow-sm', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-emerald-600', badge: 'bg-red-50 border border-red-200 text-red-700', icon: 'snowflake', accent: 'text-red-600' },
+                    easter: { page: 'bg-emerald-50 text-slate-800', header: 'bg-white border-b border-purple-200 shadow-sm', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-500', badge: 'bg-purple-50 border border-purple-200 text-purple-700', icon: 'egg', accent: 'text-purple-600' }
+                };
+                const theme = themeStyles[skin] || themeStyles.classic;
+                const eventTitle = activeEventInfo ? `${activeEventInfo.emoji} ${activeEventInfo.label}` : '';
 
                 let html = `
-                    <div class="min-h-screen ${isHalloween ? 'bg-slate-950 text-slate-100 halloween-transition' : 'bg-gray-50 text-gray-800'} pb-24 md:pb-8">
-                        <header class="${headerBg} sticky top-0 z-10 px-4 py-3 flex justify-between items-center transition-colors duration-500">
+                    <div class="min-h-screen ${theme.page} pb-24 md:pb-8">
+                        <header class="${theme.header} sticky top-0 z-10 px-4 py-3 flex justify-between items-center transition-colors duration-500">
                             <div class="flex items-center gap-2">
-                                <div class="w-8 h-8 ${isHalloween ? 'bg-orange-600' : 'bg-gradient-to-br from-purple-600 to-teal-500'} rounded-full flex items-center justify-center">
-                                    <i data-lucide="${isHalloween ? 'ghost' : 'trophy'}" class="text-white w-4 h-4"></i>
+                                <div class="w-8 h-8 ${isHalloween ? 'bg-orange-600' : skin === 'christmas' ? 'bg-red-600' : skin === 'easter' ? 'bg-purple-600' : 'bg-gradient-to-br from-purple-600 to-teal-500'} rounded-full flex items-center justify-center">
+                                    <i data-lucide="${isSeasonal && activeEventInfo ? activeEventInfo.icon : theme.icon}" class="text-white w-4 h-4"></i>
                                 </div>
-                                <span class="font-black text-xl ${logoGradient}">Climb Up ${isHalloween ? '🎃 Halloween' : ''}</span>
+                                <span onclick="openAdminGate()" class="font-black text-xl ${theme.logo}">Climb Up ${isSeasonal ? eventTitle : ''}</span>
                             </div>
                             <div class="flex items-center gap-4">
                                 <div class="text-right hidden md:block">
-                                    <p class="text-xs ${isHalloween ? 'text-orange-400' : 'text-gray-500'} font-bold uppercase">${pseudo}</p>
+                                    <p class="text-xs ${isHalloween ? 'text-orange-400' : 'text-gray-500'} font-bold uppercase">${escapeHtml(pseudo)}</p>
                                 </div>
-                                <div class="${badgeStyle} px-4 py-2 rounded-full shadow-sm flex items-center gap-2">
+                                <div class="${theme.badge} px-4 py-2 rounded-full shadow-sm flex items-center gap-2">
                                     <span class="font-black text-lg">${totalScore}</span>
                                     <span class="text-xs font-bold uppercase">pts</span>
                                 </div>
@@ -455,9 +1370,9 @@
                             <button onclick="changeTab('carte')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'carte' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
                                 <i data-lucide="map"></i> La Carte
                             </button>
-                            <button onclick="changeTab('defi_mois')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'bg-slate-800 text-orange-400 border border-orange-500/30 shadow'}">
-                                <i data-lucide="ghost"></i> Défi d'Halloween 🎃
-                            </button>
+                            ${challengeAvailable ? `<button onclick="changeTab('defi_mois')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'bg-slate-800 text-orange-400 border border-orange-500/30 shadow'}">
+                                <i data-lucide="${activeEventInfo.icon}"></i> Défi ${activeEventInfo.label} ${activeEventInfo.emoji}
+                            </button>` : ''}
                             <button onclick="changeTab('classement')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'classement' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
                                 <i data-lucide="medal"></i> Classement
                             </button>
@@ -466,7 +1381,9 @@
                         <main class="max-w-6xl mx-auto md:px-6">
                 `;
 
-                if (currentTab === 'carte') {
+                if (currentTab === 'admin') {
+                    html += renderAdminPanel();
+                } else if (currentTab === 'carte') {
                     html += `<div class="grid grid-cols-2 gap-3 sm:gap-4 p-4 md:grid-cols-4 lg:grid-cols-5">`;
                     ATELIERS.forEach(atelier => {
                         const totalDefis = atelier.defis.length;
@@ -475,11 +1392,11 @@
                         
                         html += `
                             <button onclick="openModal('${atelier.id}')" class="relative overflow-hidden rounded-3xl aspect-square shadow-md transform transition-transform active:scale-95 ${isAllCompleted ? 'ring-4 ring-teal-400 ring-offset-2' : ''}">
-                                ${atelier.preview}
+                                ${getAtelierPreview(atelier)}
                                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent flex flex-col justify-end p-3 sm:p-4">
-                                    <h3 class="text-white font-bold text-sm sm:text-base mb-2 drop-shadow-md text-left leading-tight">${atelier.name}</h3>
+                                    <h3 class="text-white font-bold text-sm sm:text-base mb-2 drop-shadow-md text-left leading-tight">${escapeHtml(atelier.name)}</h3>
                                     <div class="flex gap-1">
-                                        ${atelier.defis.map(d => `<div class="h-1.5 flex-1 rounded-full transition-colors ${completedDefis[d.id] ? 'bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)]' : 'bg-white/30 backdrop-blur-sm'}"></div>`).join('')}
+                                        ${atelier.defis.map(d => `<div class="h-1.5 flex-1 rounded-full transition-colors ${completedDefis[d.id] ? getChallengeColor(d).completed : getChallengeColor(d).progress}"></div>`).join('')}
                                     </div>
                                 </div>
                                 ${isAllCompleted ? `<div class="absolute top-2 right-2 bg-teal-400 text-white p-1 rounded-full shadow-lg"><i data-lucide="check" class="w-4 h-4 text-white"></i></div>` : ''}
@@ -489,35 +1406,43 @@
                     html += `</div>`;
                 } 
                 else if (currentTab === 'defi_mois') {
-                    if (!halloweenLevel) {
+                    const eventConfig = getCurrentEvent();
+                    if (!challengeAvailable || !eventConfig) {
+                        html += `<div class="mx-auto max-w-xl p-8 text-center"><h2 class="text-2xl font-black">Défi saisonnier désactivé</h2><p class="mt-2 text-gray-500">Le défi n'est pas activé dans le mode actuel.</p></div>`;
+                    } else if (LEVEL_KEYS.every(level => eventConfig.levels[level].length === 0)) {
+                        html += `<div class="mx-auto max-w-xl p-8 text-center"><h2 class="text-2xl font-black">${escapeHtml(eventConfig.title)}</h2><p class="mt-2 text-gray-500">Les énigmes de cet événement ne sont pas encore configurées.</p></div>`;
+                    } else if (!halloweenLevel) {
                         html += `
                             <div class="p-6 flex flex-col items-center justify-center text-center py-12">
                                 <div class="w-20 h-20 bg-orange-600/20 border border-orange-500/40 rounded-full flex items-center justify-center mb-4">
-                                    <i data-lucide="ghost" class="w-10 h-10 text-orange-400"></i>
+                                    <i data-lucide="${activeEventInfo.icon}" class="w-10 h-10 text-orange-400"></i>
                                 </div>
                                 <h2 class="text-3xl font-black text-orange-400 mb-2">Choisis ta difficulté</h2>
-                                <p class="text-slate-300 text-sm mb-8 max-w-md">Sélectionne le niveau du défi d'Halloween auquel tu souhaites participer :</p>
+                                <p class="text-slate-300 text-sm mb-8 max-w-md">Sélectionne le niveau du défi ${activeEventInfo.label} auquel tu souhaites participer :</p>
                                 <div class="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                                    <button onclick="selectHalloweenLevel('facile')" class="flex-1 bg-slate-900 border-2 border-emerald-500/50 hover:bg-emerald-950/30 text-emerald-400 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">🟢 Facile</button>
-                                    <button onclick="selectHalloweenLevel('moyen')" class="flex-1 bg-slate-900 border-2 border-amber-500/50 hover:bg-amber-950/30 text-amber-400 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">🟠 Moyen</button>
-                                    <button onclick="selectHalloweenLevel('difficile')" class="flex-1 bg-slate-900 border-2 border-red-500/50 hover:bg-red-950/30 text-red-400 font-black py-5 rounded-2xl shadow-lg transition active:scale-95 text-lg flex items-center justify-center gap-2">🔴 Difficile</button>
+                                    ${LEVEL_KEYS.map((level, index) => {
+                                        const colors = ['emerald', 'amber', 'red'];
+                                        const color = colors[index];
+                                        const disabled = eventConfig.levels[level].length === 0;
+                                        return `<button onclick="selectHalloweenLevel('${level}')" ${disabled ? 'disabled' : ''} class="flex-1 bg-slate-900 border-2 border-${color}-500/50 ${disabled ? 'opacity-40 cursor-not-allowed' : `hover:bg-${color}-950/30 active:scale-95`} text-${color}-400 font-black py-5 rounded-2xl shadow-lg transition text-lg flex items-center justify-center gap-2">${['🟢', '🟠', '🔴'][index]} ${level.charAt(0).toUpperCase() + level.slice(1)}</button>`;
+                                    }).join('')}
                                 </div>
                             </div>
                         `;
-                    } else if (isHalloweenCompleted()) {
+                    } else if (isCurrentEventCompleted()) {
                         html += `
                             <div class="p-6 flex flex-col items-center justify-center text-center py-16 halloween-transition">
                                 <div class="w-32 h-32 bg-orange-600 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(234,88,12,0.8)] mb-6 animate-bounce">
                                     <i data-lucide="award" class="w-16 h-16 text-white"></i>
                                 </div>
-                                <h1 class="text-4xl font-black text-orange-400 mb-4">🏆 VICTOIRE D'HALLOWEEN (${halloweenLevel.toUpperCase()}) ! 🎃</h1>
+                                <h1 class="text-4xl font-black text-orange-400 mb-4">🏆 ${escapeHtml(eventConfig.title)} (${halloweenLevel.toUpperCase()}) ! ${activeEventInfo.emoji}</h1>
                                 <p class="text-slate-300 text-lg max-w-xl mb-8">
-                                    Félicitations <span class="font-bold text-orange-400">${pseudo}</span> ! Tu as résolu toutes les énigmes du niveau ${halloweenLevel} avec succès !
+                                    Félicitations <span class="font-bold text-orange-400">${escapeHtml(pseudo)}</span> ! Tu as résolu toutes les énigmes du niveau ${halloweenLevel} avec succès !
                                 </p>
                                 <div class="bg-slate-900 border-2 border-orange-500/50 p-6 rounded-3xl shadow-xl max-w-md w-full mb-8">
                                     <p class="text-orange-300 font-bold mb-2">✨ Écran à présenter à l'accueil :</p>
                                     <div class="bg-slate-950 p-4 rounded-xl border border-orange-500/20 text-emerald-400 font-mono text-xl font-black tracking-wider">
-                                        [ VALIDÉ - SPOOKY ${halloweenLevel.toUpperCase()} 666 ]
+                                        [ VALIDÉ - ${activeEventInfo.label.toUpperCase()} ${halloweenLevel.toUpperCase()} ]
                                     </div>
                                 </div>
                                 <button onclick="changeHalloweenLevel()" class="text-sm text-orange-400 underline hover:text-orange-300">Changer de niveau ou recommencer</button>
@@ -533,8 +1458,8 @@
                                     <button onclick="changeHalloweenLevel()" class="text-xs bg-slate-800 text-orange-400 px-3 py-2 rounded-xl font-bold border border-orange-500/30 hover:bg-slate-700 transition">← Changer de difficulté (${halloweenLevel})</button>
                                 </div>
                                 <div class="bg-gradient-to-r from-orange-900/60 to-purple-950/60 border border-orange-500/30 rounded-3xl p-6 mb-6 text-center shadow-lg">
-                                    <h2 class="text-2xl font-black text-orange-400 mb-2">👻 Le Mystère d'Halloween (${halloweenLevel})</h2>
-                                    <p class="text-slate-300 text-sm">Remplis toutes les cases des nombres cachés pour les ateliers de ce niveau, puis clique sur vérifier !</p>
+                                    <h2 class="text-2xl font-black text-orange-400 mb-2">${activeEventInfo.emoji} ${escapeHtml(eventConfig.title)} (${halloweenLevel})</h2>
+                                    <p class="text-slate-300 text-sm">${escapeHtml(eventConfig.description)}</p>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
                         `;
@@ -551,11 +1476,11 @@
                             html += `
                                 <div class="bg-slate-900 border ${borderClass} rounded-2xl p-4 flex flex-col justify-between shadow-md ${shakeClass}">
                                     <div>
-                                        <div class="h-24 rounded-xl overflow-hidden relative mb-3">${atelier.preview}<div class="absolute inset-0 bg-black/30"></div></div>
-                                        <h3 class="text-slate-100 font-bold text-sm mb-3">${atelier.name}</h3>
+                                        <div class="h-24 rounded-xl overflow-hidden relative mb-3">${getAtelierPreview(atelier)}<div class="absolute inset-0 bg-black/30"></div></div>
+                                        <h3 class="text-slate-100 font-bold text-sm mb-3">${escapeHtml(atelier.name)}</h3>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <input type="number" placeholder="Nombre..." value="${val}" oninput="handleHalloweenInput('${atelier.id}', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-center text-sm outline-none focus:border-orange-500" />
+                                        <input type="number" placeholder="Réponse..." value="${escapeHtml(val)}" oninput="handleHalloweenInput('${atelier.id}', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-center text-sm outline-none focus:border-orange-500" />
                                         ${status === 'correct' ? '<span class="text-emerald-400 font-bold text-lg">✓</span>' : status === 'error' ? '<span class="text-red-500 font-bold text-lg">✗</span>' : ''}
                                     </div>
                                 </div>
@@ -643,52 +1568,60 @@
                         <button onclick="changeTab('carte')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'carte' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
                             <i data-lucide="map" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Carte</span>
                         </button>
-                        <button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'defi_mois' ? (isHalloween ? 'text-orange-400 font-black' : 'text-purple-600') : 'text-gray-400'}">
-                            <i data-lucide="ghost" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Halloween</span>
-                        </button>
+                        ${challengeAvailable ? `<button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'defi_mois' ? (isHalloween ? 'text-orange-400 font-black' : 'text-purple-600') : 'text-gray-400'}">
+                            <i data-lucide="${activeEventInfo.icon}" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">${activeEventInfo.label}</span>
+                        </button>` : ''}
                         <button onclick="changeTab('classement')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'classement' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
                             <i data-lucide="medal" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Classement</span>
                         </button>
                     </nav>
                 `;
 
+                if (selectedAtelierId && !ATELIERS.some(atelier => atelier.id === selectedAtelierId)) {
+                    selectedAtelierId = null;
+                }
                 if (selectedAtelierId) {
                     const atelier = ATELIERS.find(a => a.id === selectedAtelierId);
                     
-                    const atelierScore = atelier.defis.reduce((acc, curr) => acc + (completedDefis[curr.id] ? curr.points : 0), 0);
-                    const maxScore = atelier.defis.reduce((acc, curr) => acc + curr.points, 0);
+                    const pointDefis = atelier.defis.filter(defi => defi.rewardType !== 'gift');
+                    const atelierScore = pointDefis.reduce((acc, curr) => acc + (completedDefis[curr.id] ? curr.points : 0), 0);
+                    const maxScore = pointDefis.reduce((acc, curr) => acc + curr.points, 0);
 
                     html += `
                         <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col justify-end md:justify-center md:items-center">
                             <div class="bg-gray-50 text-gray-800 w-full md:w-[450px] md:rounded-3xl rounded-t-3xl min-h-[60vh] md:min-h-0 flex flex-col overflow-hidden shadow-2xl modal-animate">
                                 <div class="relative h-40 w-full">
-                                    ${atelier.preview}
+                                    ${getAtelierPreview(atelier)}
                                     <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
                                     <button onclick="closeModal()" class="absolute top-4 right-4 bg-black/40 backdrop-blur-md text-white p-2 rounded-full hover:bg-black/60 transition">
                                         <i data-lucide="x" class="w-5 h-5"></i>
                                     </button>
-                                    <h2 class="absolute bottom-4 left-6 text-white text-3xl font-black drop-shadow-md">${atelier.name}</h2>
+                                    <h2 class="absolute bottom-4 left-6 text-white text-3xl font-black drop-shadow-md">${escapeHtml(atelier.name)}</h2>
                                 </div>
                                 
                                 <div class="p-6 space-y-3 flex-1 overflow-y-auto max-h-[50vh]">
-                                    <p class="text-gray-500 font-medium mb-4">Coche les défis que tu as validés pour gagner des points !</p>
+                                    <p class="text-gray-500 font-medium mb-4">Valide les défis pour obtenir les points ou cadeaux indiqués.</p>
                                     ${atelier.defis.map(defi => {
                                         const isDone = completedDefis[defi.id];
+                                        const color = getChallengeColor(defi);
                                         return `
-                                            <button onclick="toggleDefi('${defi.id}')" class="w-full flex items-center p-4 rounded-2xl border-2 text-left transition-all ${isDone ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50'}">
-                                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isDone ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 bg-gray-50'}">
+                                            <button onclick="toggleDefi('${defi.id}')" class="w-full flex items-center p-4 rounded-2xl border-2 text-left transition-all ${color.card} ${isDone ? 'shadow-sm' : 'opacity-85 hover:opacity-100'}">
+                                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isDone ? `${color.completed} border-white text-white` : 'border-current/30 bg-white/70'}">
                                                     ${isDone ? `<i data-lucide="check" class="w-3.5 h-3.5"></i>` : ''}
                                                 </div>
-                                                <div class="flex-1"><p class="font-bold leading-tight ${isDone ? 'text-teal-900' : 'text-gray-700'}">${defi.text}</p></div>
-                                                <div class="font-black text-lg ml-3 ${isDone ? 'text-teal-600' : 'text-purple-600'}">+${defi.points}</div>
+                                                <div class="flex-1"><p class="font-bold leading-tight">${escapeHtml(defi.text)}</p></div>
+                                                <div class="ml-3 rounded-full px-3 py-1 text-xs font-black ${color.reward}">${defi.rewardType === 'gift' ? escapeHtml(getChallengeRewardLabel(defi)) : `+${defi.points} pts`}</div>
                                             </button>
                                         `;
                                     }).join('')}
                                 </div>
                                 
                                 <div class="p-4 bg-white border-t border-gray-100 flex justify-between items-center pb-safe">
-                                    <div class="text-gray-500 font-bold">Total sur cet atelier</div>
-                                    <div class="text-2xl font-black text-purple-600">${atelierScore} <span class="text-sm text-gray-400 font-bold ml-1">/ ${maxScore}</span></div>
+                                    <div>
+                                        <div class="text-gray-500 font-bold">Points sur cet atelier</div>
+                                        ${atelier.defis.some(defi => defi.rewardType === 'gift') ? '<div class="mt-1 text-xs font-medium text-gray-500">Les cadeaux sont indiqués sur chaque défi.</div>' : ''}
+                                    </div>
+                                    <div class="text-right font-black text-purple-600">${maxScore ? `<span class="text-2xl">${atelierScore}</span> <span class="text-sm text-gray-400 font-bold ml-1">/ ${maxScore} pts</span>` : '<span class="text-sm text-gray-500">Cadeaux uniquement</span>'}</div>
                                 </div>
                             </div>
                         </div>
@@ -706,19 +1639,72 @@
         async function initApp() {
             render(); 
             
-            try {
-                onSnapshot(collection(db, "users"), (snapshot) => {
-                    allUsersData = [];
-                    snapshot.forEach((doc) => {
-                        allUsersData.push({ id: doc.id, ...doc.data() });
-                    });
-                    if (currentTab === 'classement') {
-                        render();
-                    }
-                }, (error) => {
-                    console.warn("Écoute Firebase échouée :", error);
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                allUsersData = [];
+                snapshot.forEach((userDoc) => {
+                    allUsersData.push({ id: userDoc.id, ...userDoc.data() });
                 });
-            } catch (e) {}
+                if (currentTab === 'classement' || currentTab === 'admin') render();
+            }, (error) => {
+                console.error("Écoute des profils Firebase échouée :", error);
+                if (currentTab === 'admin') {
+                    adminError = "Les profils et statistiques ne sont pas accessibles. Vérifie les règles Firestore.";
+                    render();
+                }
+            });
+
+            onSnapshot(collection(db, "workshopImages"), (snapshot) => {
+                const nextImages = {};
+                snapshot.forEach(imageDoc => {
+                    const imageDataUrl = imageDoc.data().imageDataUrl;
+                    if (typeof imageDataUrl === 'string'
+                        && imageDataUrl.length <= 300000
+                        && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl)) {
+                        nextImages[imageDoc.id] = imageDataUrl;
+                    }
+                });
+                workshopImages = nextImages;
+                if (currentTab === 'carte' || currentTab === 'admin' || selectedAtelierId) render();
+            }, error => {
+                console.error("Lecture des miniatures d'ateliers échouée :", error);
+                if (currentTab === 'admin') {
+                    adminError = "Les miniatures d'ateliers ne sont pas accessibles. Vérifie les règles Firestore.";
+                    render();
+                }
+            });
+
+            onSnapshot(doc(db, "appConfig", "main"), (snapshot) => {
+                if (snapshot.exists()) applyAppConfiguration(snapshot.data());
+                if (currentTab !== 'admin' || snapshot.exists()) render();
+            }, (error) => {
+                console.error("Lecture de la configuration de l'application échouée :", error);
+                appConfigError = "La configuration partagée n'a pas pu être lue. Vérifie les règles Firestore.";
+                if (currentTab === 'admin') render();
+            });
+
+            onAuthStateChanged(auth, async user => {
+                adminUser = user;
+                adminAuthorized = false;
+                if (user) {
+                    try {
+                        const token = await user.getIdTokenResult(true);
+                        adminAuthorized = token.claims.admin === true;
+                        if (!adminAuthorized && currentTab === 'admin') {
+                            adminError = "Ce compte Firebase ne possède pas le rôle administrateur.";
+                        }
+                    } catch (error) {
+                        console.error("Vérification du rôle admin échouée :", error);
+                        adminError = "Impossible de vérifier les droits administrateur.";
+                    }
+                }
+                if (currentTab === 'admin') render();
+            }, error => {
+                console.error("Écoute de la session Firebase échouée :", error);
+                if (currentTab === 'admin') {
+                    adminError = "La session administrateur n'a pas pu être vérifiée.";
+                    render();
+                }
+            });
         }
 
         initApp();
