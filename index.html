@@ -179,16 +179,65 @@
         }
 
         let completedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
+        const halloweenStorageKey = `climbup_halloween_progress_${userId}`;
+
+        function loadHalloweenProgress() {
+            const storedProgress = localStorage.getItem(halloweenStorageKey);
+            if (!storedProgress) return { activeLevel: null, levels: {} };
+
+            try {
+                const parsed = JSON.parse(storedProgress);
+                const levels = parsed && parsed.levels && typeof parsed.levels === 'object' ? parsed.levels : {};
+                Object.keys(levels).forEach(level => {
+                    if (!Object.prototype.hasOwnProperty.call(DIFF_GROUPES, level)) {
+                        delete levels[level];
+                        return;
+                    }
+                    const progress = levels[level];
+                    if (!progress || typeof progress !== 'object') {
+                        delete levels[level];
+                        return;
+                    }
+                    progress.inputs = progress.inputs && typeof progress.inputs === 'object' ? progress.inputs : {};
+                    progress.status = progress.status && typeof progress.status === 'object' ? progress.status : {};
+                    progress.submitted = !!progress.submitted;
+                });
+                return {
+                    activeLevel: Object.prototype.hasOwnProperty.call(DIFF_GROUPES, parsed.activeLevel) ? parsed.activeLevel : null,
+                    levels
+                };
+            } catch (error) {
+                console.warn("Progression Halloween enregistrée illisible :", error);
+                return { activeLevel: null, levels: {} };
+            }
+        }
+
+        const savedHalloweenProgress = loadHalloweenProgress();
         
         let currentTab = 'carte'; 
         let leaderboardTab = 'jour';
         let selectedAtelierId = null;
         let allUsersData = [];
         
-        let halloweenLevel = null; 
-        let halloweenInputs = {}; 
-        let halloweenSubmitted = false;
-        let halloweenStatus = {};
+        let halloweenLevel = savedHalloweenProgress.activeLevel;
+        let halloweenProgressByLevel = savedHalloweenProgress.levels;
+        let halloweenInputs = halloweenLevel && halloweenProgressByLevel[halloweenLevel] ? halloweenProgressByLevel[halloweenLevel].inputs : {};
+        let halloweenSubmitted = halloweenLevel && halloweenProgressByLevel[halloweenLevel] ? halloweenProgressByLevel[halloweenLevel].submitted : false;
+        let halloweenStatus = halloweenLevel && halloweenProgressByLevel[halloweenLevel] ? halloweenProgressByLevel[halloweenLevel].status : {};
+
+        function saveHalloweenProgress() {
+            if (halloweenLevel) {
+                halloweenProgressByLevel[halloweenLevel] = {
+                    inputs: halloweenInputs,
+                    status: halloweenStatus,
+                    submitted: halloweenSubmitted
+                };
+            }
+            localStorage.setItem(halloweenStorageKey, JSON.stringify({
+                activeLevel: halloweenLevel,
+                levels: halloweenProgressByLevel
+            }));
+        }
 
         // --- CALCUL DES SCORES VIA TIMESTAMP ---
         function getStartOfDay() {
@@ -201,12 +250,17 @@
             const diff = now.getDate() - day + (day === 0 ? -6 : 1);
             return new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0).getTime();
         }
+        function getStartOfMonth() {
+            const now = new Date();
+            return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        }
         function calculateUserScores(defis) {
-            let total = 0, daily = 0, weekly = 0;
+            let total = 0, daily = 0, weekly = 0, monthly = 0;
             const startOfDay = getStartOfDay();
             const startOfWeek = getStartOfWeek();
+            const startOfMonth = getStartOfMonth();
 
-            if (!defis) return { total: 0, daily: 0, weekly: 0 };
+            if (!defis) return { total: 0, daily: 0, weekly: 0, monthly: 0 };
 
             ATELIERS.forEach(atelier => {
                 atelier.defis.forEach(defi => {
@@ -215,10 +269,11 @@
                         total += defi.points;
                         if (timestamp >= startOfDay) daily += defi.points;
                         if (timestamp >= startOfWeek) weekly += defi.points;
+                        if (timestamp >= startOfMonth) monthly += defi.points;
                     }
                 });
             });
-            return { total, daily, weekly };
+            return { total, daily, weekly, monthly };
         }
 
         // --- ACTIONS EXPORTÉES DANS WINDOW POUR HTML ---
@@ -266,19 +321,33 @@
         window.closeModal = () => { selectedAtelierId = null; render(); };
         window.changeTab = tab => { 
             currentTab = tab; 
-            if (tab === 'defi_mois') { halloweenLevel = null; halloweenInputs = {}; halloweenStatus = {}; halloweenSubmitted = false; }
             render(); 
         };
         window.changeLeaderboardTab = tab => { leaderboardTab = tab; render(); };
 
         window.selectHalloweenLevel = lvl => {
-            halloweenLevel = lvl; halloweenInputs = {}; halloweenStatus = {}; halloweenSubmitted = false;
+            halloweenLevel = lvl;
+            const savedProgress = halloweenProgressByLevel[lvl];
+            halloweenInputs = savedProgress ? savedProgress.inputs : {};
+            halloweenStatus = savedProgress ? savedProgress.status : {};
+            halloweenSubmitted = savedProgress ? savedProgress.submitted : false;
+            saveHalloweenProgress();
+            render();
+        };
+        window.changeHalloweenLevel = function() {
+            saveHalloweenProgress();
+            halloweenLevel = null;
+            halloweenInputs = {};
+            halloweenStatus = {};
+            halloweenSubmitted = false;
+            saveHalloweenProgress();
             render();
         };
 
         window.handleHalloweenInput = (atelierId, val) => {
             halloweenInputs[atelierId] = val;
             if (halloweenStatus[atelierId]) delete halloweenStatus[atelierId];
+            saveHalloweenProgress();
             const btn = document.getElementById('verifyBtn');
             if (btn) {
                 if (areAllFilled()) {
@@ -319,6 +388,7 @@
                 }
             });
             halloweenSubmitted = true;
+            saveHalloweenProgress();
             render();
         };
 
@@ -450,7 +520,7 @@
                                         [ VALIDÉ - SPOOKY ${halloweenLevel.toUpperCase()} 666 ]
                                     </div>
                                 </div>
-                                <button onclick="halloweenLevel = null; render();" class="text-sm text-orange-400 underline hover:text-orange-300">Changer de niveau ou recommencer</button>
+                                <button onclick="changeHalloweenLevel()" class="text-sm text-orange-400 underline hover:text-orange-300">Changer de niveau ou recommencer</button>
                             </div>
                         `;
                     } else {
@@ -460,7 +530,7 @@
                         html += `
                             <div class="p-4">
                                 <div class="flex justify-between items-center mb-6">
-                                    <button onclick="halloweenLevel = null; render();" class="text-xs bg-slate-800 text-orange-400 px-3 py-2 rounded-xl font-bold border border-orange-500/30 hover:bg-slate-700 transition">← Changer de difficulté (${halloweenLevel})</button>
+                                    <button onclick="changeHalloweenLevel()" class="text-xs bg-slate-800 text-orange-400 px-3 py-2 rounded-xl font-bold border border-orange-500/30 hover:bg-slate-700 transition">← Changer de difficulté (${halloweenLevel})</button>
                                 </div>
                                 <div class="bg-gradient-to-r from-orange-900/60 to-purple-950/60 border border-orange-500/30 rounded-3xl p-6 mb-6 text-center shadow-lg">
                                     <h2 class="text-2xl font-black text-orange-400 mb-2">👻 Le Mystère d'Halloween (${halloweenLevel})</h2>
@@ -522,12 +592,14 @@
                             pseudo: u.pseudo || 'Anonyme', 
                             daily: scores.daily, 
                             weekly: scores.weekly, 
+                            monthly: scores.monthly,
                             isCurrent: u.id === userId 
                         };
                     });
 
                     const dbJour = usersScores.filter(u => u.daily > 0).sort((a,b) => b.daily - a.daily).map((u, i) => ({...u, rank: i+1, score: u.daily}));
                     const dbSemaine = usersScores.filter(u => u.weekly > 0).sort((a,b) => b.weekly - a.weekly).map((u, i) => ({...u, rank: i+1, score: u.weekly}));
+                    const dbMois = usersScores.filter(u => u.monthly > 0).sort((a,b) => b.monthly - a.monthly).map((u, i) => ({...u, rank: i+1, score: u.monthly}));
 
                     const buildTable = (data, title, subtitle, bgColor) => `
                         <div class="flex-1 bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100">
@@ -551,13 +623,15 @@
                     `;
 
                     html += `
-                        <div class="p-4 flex flex-col md:flex-row gap-6">
-                            <div class="flex bg-gray-200 rounded-xl p-1 md:hidden mb-4">
+                        <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div class="flex bg-gray-200 rounded-xl p-1 lg:hidden mb-2 col-span-full">
                                 <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Aujourd'hui</button>
                                 <button onclick="changeLeaderboardTab('semaine')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'semaine' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Cette Semaine</button>
+                                <button onclick="changeLeaderboardTab('mois')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'mois' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Ce Mois</button>
                             </div>
-                            <div class="${leaderboardTab !== 'jour' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(dbJour, "Top du Jour", "Réinitialisation à minuit", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
-                            <div class="${leaderboardTab !== 'semaine' ? 'hidden md:block flex-1' : 'flex-1'}">${buildTable(dbSemaine, "Top de la Semaine", "Réinitialisation dimanche à minuit", "bg-gradient-to-r from-teal-500 to-teal-400")}</div>
+                            <div class="${leaderboardTab !== 'jour' ? 'hidden lg:block' : ''}">${buildTable(dbJour, "Top du Jour", "Réinitialisation à minuit", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
+                            <div class="${leaderboardTab !== 'semaine' ? 'hidden lg:block' : ''}">${buildTable(dbSemaine, "Top de la Semaine", "Réinitialisation lundi à minuit", "bg-gradient-to-r from-teal-500 to-teal-400")}</div>
+                            <div class="${leaderboardTab !== 'mois' ? 'hidden lg:block' : ''}">${buildTable(dbMois, "Top du Mois", "Réinitialisation le 1er du mois", "bg-gradient-to-r from-orange-500 to-orange-400")}</div>
                         </div>
                     `;
                 }
