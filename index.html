@@ -11,10 +11,14 @@
             from { transform: translateY(100%); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
-        @keyframes spookyFade {
-            0% { opacity: 0; transform: scale(0.95); filter: hue-rotate(0deg); }
-            50% { filter: hue-rotate(40deg); }
-            100% { opacity: 1; transform: scale(1); filter: hue-rotate(0deg); }
+        @keyframes rewardReveal {
+            0% { opacity: 0; transform: translateY(28px) scale(.82) rotate(-2deg); }
+            65% { opacity: 1; transform: translateY(-4px) scale(1.025) rotate(1deg); }
+            100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+        }
+        @keyframes themeEnter {
+            from { opacity: 0; transform: translate3d(0, 10px, 0); }
+            to { opacity: 1; transform: translate3d(0, 0, 0); }
         }
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
@@ -24,8 +28,11 @@
         .modal-animate {
             animation: slideUp 0.3s ease-out forwards;
         }
+        .reward-reveal {
+            animation: rewardReveal .7s cubic-bezier(.16, 1, .3, 1) both;
+        }
         .halloween-transition {
-            animation: spookyFade 0.5s ease-out forwards;
+            animation: themeEnter 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
         .shake-error {
             animation: shake 0.4s ease-in-out;
@@ -39,6 +46,187 @@
         .challenge-color-option input:focus-visible + span {
             box-shadow: 0 0 0 3px white, 0 0 0 5px #64748b;
         }
+        .app-shell {
+            isolation: isolate;
+            background-image: radial-gradient(ellipse at 10% 0%, rgba(124, 58, 237, 0.08), transparent 34%), radial-gradient(ellipse at 95% 35%, rgba(20, 184, 166, 0.08), transparent 32%);
+        }
+        .theme-christmas {
+            background-image: radial-gradient(ellipse at 0% 0%, rgba(239, 68, 68, 0.09), transparent 35%), radial-gradient(ellipse at 100% 30%, rgba(16, 185, 129, 0.1), transparent 35%);
+        }
+        .theme-halloween {
+            background-image: radial-gradient(ellipse at 88% 8%, rgba(249, 115, 22, 0.28), transparent 31%), radial-gradient(ellipse at 6% 40%, rgba(147, 51, 234, 0.2), transparent 34%), linear-gradient(165deg, #090715 0%, #171022 48%, #100b1b 100%);
+            background-size: 140% 140%;
+        }
+        .theme-easter {
+            background-image: radial-gradient(ellipse at 0% 0%, rgba(192, 132, 252, 0.12), transparent 36%), radial-gradient(ellipse at 100% 30%, rgba(244, 114, 182, 0.1), transparent 34%);
+        }
+        .seasonal-decor {
+            position: absolute;
+            inset: 13rem 0 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .seasonal-decor > * { pointer-events: none; }
+        .app-header { position: sticky; top: 0; z-index: 30; }
+        .app-main { position: relative; z-index: 10; }
+        .app-desktop-nav {
+            position: relative;
+            z-index: 20;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: .75rem;
+            padding: 1.25rem 1rem;
+        }
+        .app-desktop-nav button { flex: 0 0 auto; white-space: nowrap; }
+        .app-mobile-nav {
+            min-height: 4.25rem;
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+        .app-mobile-nav button { min-width: 0; }
+        .app-mobile-nav span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .map-intro-panel {
+            position: relative;
+            z-index: 10;
+            isolation: isolate;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .8);
+            border-radius: 1.5rem;
+            background: rgba(255, 255, 255, .94);
+            padding: 1.25rem;
+            box-shadow: 0 12px 30px rgba(30, 41, 59, .08);
+        }
+        .theme-halloween .map-intro-panel {
+            border-color: rgba(251, 146, 60, .24);
+            background: rgba(15, 12, 27, .96);
+            box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
+        }
+        .seasonal-ornament {
+            position: absolute;
+            opacity: 0.9;
+            filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.28));
+            transform-origin: center;
+            animation: ornamentDrift 9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+        }
+        .seasonal-ornament:nth-child(2n) { animation-delay: -3s; }
+        .seasonal-ornament:nth-child(3n) { animation-delay: -6s; }
+        .theme-christmas .seasonal-ornament,
+        .theme-easter .seasonal-ornament { opacity: 0.82; }
+        .theme-halloween .seasonal-ornament { opacity: 1; }
+        .seasonal-snow {
+            position: absolute;
+            inset: 0;
+            opacity: 0.7;
+            background-image: radial-gradient(3px 3px at 12% 18%, white 98%, transparent), radial-gradient(4px 4px at 78% 12%, white 98%, transparent), radial-gradient(2px 2px at 91% 48%, white 98%, transparent), radial-gradient(4px 4px at 31% 61%, white 98%, transparent), radial-gradient(3px 3px at 66% 76%, white 98%, transparent), radial-gradient(2px 2px at 8% 89%, white 98%, transparent);
+            background-size: 260px 280px;
+            animation: snowDrift 24s linear infinite;
+        }
+        .halloween-moon {
+            position: absolute;
+            top: 8rem;
+            right: max(8%, calc((100% - 1120px) / 2));
+            width: clamp(110px, 18vw, 220px);
+            aspect-ratio: 1;
+            border-radius: 9999px;
+            background: radial-gradient(circle at 35% 32%, #fff2c2 0%, #ffbd52 42%, #f97316 73%, #b93811 100%);
+            box-shadow: 0 0 45px rgba(249, 115, 22, 0.45), 0 0 120px rgba(249, 115, 22, 0.18);
+            opacity: 0.76;
+            animation: moonPulse 8s ease-in-out infinite;
+        }
+        .halloween-moon::before,
+        .halloween-moon::after {
+            content: "";
+            position: absolute;
+            top: 38%;
+            width: 9%;
+            height: 13%;
+            border-radius: 50%;
+            background: #422006;
+        }
+        .halloween-moon::before { left: 31%; }
+        .halloween-moon::after { right: 31%; }
+        .halloween-moon-face {
+            position: absolute;
+            left: 39%;
+            top: 58%;
+            width: 22%;
+            height: 12%;
+            border-bottom: 4px solid #422006;
+            border-radius: 0 0 50% 50%;
+        }
+        .haunted-silhouette {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: clamp(100px, 18vw, 210px);
+            color: #080611;
+            opacity: 0.88;
+        }
+        .christmas-lights {
+            position: absolute;
+            top: 5.2rem;
+            left: 0;
+            width: 100%;
+            height: 28px;
+            border-top: 3px solid rgba(30, 41, 59, .25);
+            background: radial-gradient(circle, #ef4444 0 4px, transparent 5px) 2px 8px / 56px 26px repeat-x,
+                radial-gradient(circle, #16a34a 0 4px, transparent 5px) 28px 12px / 56px 26px repeat-x,
+                radial-gradient(circle, #facc15 0 4px, transparent 5px) 14px 18px / 56px 26px repeat-x;
+            filter: drop-shadow(0 3px 8px rgba(234, 179, 8, .35));
+        }
+        .easter-egg {
+            position: absolute;
+            width: 34px;
+            height: 46px;
+            border-radius: 50% 50% 45% 45%;
+            border: 3px solid rgba(255,255,255,.8);
+            box-shadow: 0 8px 18px rgba(76,29,149,.18);
+            animation: ornamentDrift 8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+        }
+        .map-watermark {
+            position: absolute;
+            z-index: 0;
+            width: min(68vw, 520px);
+            aspect-ratio: 1;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            object-fit: contain;
+            opacity: 0.16;
+            mix-blend-mode: multiply;
+            pointer-events: none;
+        }
+        .theme-halloween .map-watermark { opacity: 0.1; mix-blend-mode: screen; }
+        .theme-christmas .map-watermark { opacity: 0.13; }
+        .theme-easter .map-watermark { opacity: 0.13; }
+        .map-workshop-card {
+            border: 1px solid rgba(255, 255, 255, 0.65);
+            box-shadow: 0 10px 24px rgba(30, 41, 59, 0.14);
+        }
+        .theme-classic .map-workshop-card:hover,
+        .theme-christmas .map-workshop-card:hover,
+        .theme-easter .map-workshop-card:hover {
+            box-shadow: 0 16px 30px rgba(76, 29, 149, 0.2);
+            transform: translateY(-3px);
+        }
+        @keyframes ornamentDrift {
+            0%, 100% { transform: translate3d(0, 0, 0) rotate(-3deg) scale(1); }
+            50% { transform: translate3d(0, -14px, 0) rotate(3deg) scale(1.035); }
+        }
+        @keyframes snowDrift {
+            from { background-position: 0 -280px, 0 -280px; }
+            to { background-position: 40px 0, -30px 0; }
+        }
+        @keyframes moonPulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.035); filter: brightness(1.08); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .seasonal-ornament, .seasonal-snow, .halloween-moon, .easter-egg, .theme-halloween, .reward-reveal { animation: none !important; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased select-none transition-colors duration-500">
@@ -48,7 +236,7 @@
     <script type="module">
         // --- INITIALISATION FIREBASE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, deleteDoc, updateDoc, arrayUnion, runTransaction, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -206,6 +394,8 @@
             mode: 'halloween',
             skin: 'halloween',
             challengeEnabled: true,
+            monthlyRewardsEnabled: false,
+            monthlyRewards: [],
             workshops: {},
             events: DEFAULT_EVENTS
         };
@@ -241,10 +431,29 @@
                 mode: VALID_MODES.includes(raw.mode) ? raw.mode : DEFAULT_APP_SETTINGS.mode,
                 skin: VALID_SKINS.includes(raw.skin) ? raw.skin : DEFAULT_APP_SETTINGS.skin,
                 challengeEnabled: typeof raw.challengeEnabled === 'boolean' ? raw.challengeEnabled : DEFAULT_APP_SETTINGS.challengeEnabled,
+                monthlyRewardsEnabled: typeof raw.monthlyRewardsEnabled === 'boolean' ? raw.monthlyRewardsEnabled : DEFAULT_APP_SETTINGS.monthlyRewardsEnabled,
+                monthlyRewards: [],
                 workshopIds: ATELIERS.map(atelier => atelier.id),
                 workshops: {},
                 events: {}
             };
+
+            const usedRewardIds = new Set();
+            if (Array.isArray(raw.monthlyRewards)) {
+                raw.monthlyRewards.slice(0, 20).forEach(reward => {
+                    if (!reward || typeof reward.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(reward.id)
+                        || usedRewardIds.has(reward.id) || !Number.isInteger(Number(reward.points))
+                        || Number(reward.points) < 1 || Number(reward.points) > 100000
+                        || typeof reward.title !== 'string' || !reward.title.trim()) return;
+                    usedRewardIds.add(reward.id);
+                    settings.monthlyRewards.push({
+                        id: reward.id,
+                        points: Number(reward.points),
+                        title: reward.title.trim().slice(0, 80),
+                        description: typeof reward.description === 'string' ? reward.description.trim().slice(0, 240) : ''
+                    });
+                });
+            }
 
             const usedDefiIds = new Set();
             ATELIERS.forEach(atelier => {
@@ -326,6 +535,8 @@
                 mode: settings.mode,
                 skin: settings.skin,
                 challengeEnabled: settings.challengeEnabled,
+                monthlyRewardsEnabled: settings.monthlyRewardsEnabled,
+                monthlyRewards: settings.monthlyRewards,
                 workshopIds: ATELIERS.map(atelier => atelier.id),
                 workshops: getWorkshopSettings(),
                 events: settings.events
@@ -351,6 +562,14 @@
         }
 
         let completedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
+        const openedMonthlyRewardsStorageKey = `climbup_opened_monthly_rewards_${userId}`;
+        let openedMonthlyRewards = [];
+        try {
+            const storedOpenedRewards = JSON.parse(localStorage.getItem(openedMonthlyRewardsStorageKey) || '[]');
+            openedMonthlyRewards = Array.isArray(storedOpenedRewards) ? storedOpenedRewards.filter(item => typeof item === 'string') : [];
+        } catch (error) {
+            console.warn("Récompenses mensuelles enregistrées illisibles :", error);
+        }
         const halloweenStorageKey = `climbup_halloween_progress_${userId}`;
 
         function getEventProgressStorageKey(mode) {
@@ -395,14 +614,28 @@
         let selectedAtelierId = null;
         let allUsersData = [];
         let workshopImages = {};
+        let rewardImages = {};
         let appSettings = normalizeAppSettings(DEFAULT_APP_SETTINGS);
         let appConfigError = '';
         let adminUser = null;
         let adminAuthorized = false;
         let adminError = '';
         let adminMessage = '';
+        let adminTab = 'gestion';
+        let rewardError = '';
+        const openingMonthlyRewards = new Set();
+        const claimingMonthlyRewards = new Set();
+        let rewardReceptionDayKey = '';
+        let rewardReceptionState = { currentSessionId: 1 };
+        let rewardReceptionSessions = [];
+        let rewardReceptionError = '';
+        let rewardReceptionDayUnsubscribe = null;
+        let rewardReceptionSessionsUnsubscribe = null;
+        let advancingRewardReceptionSession = false;
         let adminSelectedWorkshop = ATELIERS[0].id;
         let adminWorkshopDraft = JSON.parse(JSON.stringify(ATELIERS[0]));
+        let adminRewardDraft = JSON.parse(JSON.stringify(appSettings.monthlyRewards));
+        let selectedRewardId = null;
         let adminSelectedSeason = 'christmas';
         let adminEventDraft = JSON.parse(JSON.stringify(appSettings.events[adminSelectedSeason]));
         let adminGateTapCount = 0;
@@ -439,9 +672,13 @@
             const selectedWorkshop = ATELIERS.find(atelier => atelier.id === adminSelectedWorkshop) || ATELIERS[0];
             adminWorkshopDraft = JSON.parse(JSON.stringify(selectedWorkshop));
             adminEventDraft = JSON.parse(JSON.stringify(appSettings.events[adminSelectedSeason]));
+            adminRewardDraft = JSON.parse(JSON.stringify(appSettings.monthlyRewards));
             appConfigError = '';
             if (!appSettings.challengeEnabled || appSettings.mode === 'classic') {
                 if (currentTab === 'defi_mois') currentTab = 'carte';
+            }
+            if (!appSettings.monthlyRewardsEnabled || !appSettings.monthlyRewards.length) {
+                if (currentTab === 'recompenses') currentTab = 'carte';
             }
             if (previousMode !== appSettings.mode) {
                 const eventProgress = loadHalloweenProgress(getEventProgressStorageKey(appSettings.mode));
@@ -943,6 +1180,17 @@
             const now = new Date();
             return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
         }
+        function getCurrentRewardMonthKey() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+        function getCurrentRewardDayKey() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        }
+        function getMonthlyRewardClaimKey(rewardId, monthKey = getCurrentRewardMonthKey()) {
+            return `${monthKey}_${rewardId}`;
+        }
         function calculateUserScores(defis) {
             let total = 0, daily = 0, weekly = 0, monthly = 0;
             const startOfDay = getStartOfDay();
@@ -964,6 +1212,110 @@
                 });
             });
             return { total, daily, weekly, monthly };
+        }
+
+        function calculateMonthlyScoreForKey(defis, monthKey) {
+            const [year, month] = monthKey.split('-').map(Number);
+            const monthStart = new Date(year, month - 1, 1).getTime();
+            const nextMonthStart = new Date(year, month, 1).getTime();
+            let score = 0;
+            ATELIERS.forEach(atelier => atelier.defis.forEach(defi => {
+                const timestamp = Number((defis || {})[defi.id]);
+                if (timestamp >= monthStart && timestamp < nextMonthStart) {
+                    score += defi.rewardType === 'gift' ? 0 : defi.points;
+                }
+            }));
+            return score;
+        }
+
+        function getEarnedMonthlyRewardEntries(defis, rewards = appSettings.monthlyRewards) {
+            const months = new Set();
+            Object.values(defis || {}).forEach(value => {
+                const date = new Date(Number(value));
+                if (!Number.isNaN(date.getTime())) {
+                    months.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                }
+            });
+            return [...months].flatMap(monthKey => rewards
+                .filter(reward => calculateMonthlyScoreForKey(defis, monthKey) >= reward.points)
+                .map(reward => ({ reward, monthKey, claimKey: getMonthlyRewardClaimKey(reward.id, monthKey) }))
+            ).sort((first, second) =>
+                second.monthKey.localeCompare(first.monthKey)
+                || Number(first.reward.points) - Number(second.reward.points)
+            );
+        }
+
+        function getActiveRewardReceptionEntries() {
+            const archivedClaimIds = new Set(rewardReceptionSessions.flatMap(session =>
+                Array.isArray(session.claimIds) ? session.claimIds : []
+            ));
+            return allUsersData.flatMap(user => getEarnedMonthlyRewardEntries(user.completedDefis || {})
+                .filter(entry =>
+                    !archivedClaimIds.has(`${user.id}:${entry.claimKey}`)
+                )
+                .map(entry => ({
+                    playerId: user.id,
+                    pseudo: user.pseudo || 'Anonyme',
+                    rewardId: entry.reward.id,
+                    rewardTitle: entry.reward.title,
+                    points: entry.reward.points,
+                    monthKey: entry.monthKey,
+                    rewardClaimKey: entry.claimKey,
+                    claimId: `${user.id}:${entry.claimKey}`,
+                    lastUpdated: Number(user.lastUpdated) || 0
+                }))
+            ).sort((first, second) =>
+                second.lastUpdated - first.lastUpdated
+                || second.monthKey.localeCompare(first.monthKey)
+                || first.pseudo.localeCompare(second.pseudo, 'fr')
+            );
+        }
+
+        function stopRewardReceptionListeners() {
+            if (rewardReceptionDayUnsubscribe) rewardReceptionDayUnsubscribe();
+            if (rewardReceptionSessionsUnsubscribe) rewardReceptionSessionsUnsubscribe();
+            rewardReceptionDayUnsubscribe = null;
+            rewardReceptionSessionsUnsubscribe = null;
+            rewardReceptionDayKey = '';
+            rewardReceptionState = { currentSessionId: 1 };
+            rewardReceptionSessions = [];
+        }
+
+        function syncRewardReceptionListeners() {
+            if (!adminAuthorized || currentTab !== 'admin' || adminTab !== 'retraits') {
+                stopRewardReceptionListeners();
+                return;
+            }
+            const dayKey = getCurrentRewardDayKey();
+            if (dayKey === rewardReceptionDayKey && rewardReceptionDayUnsubscribe) return;
+            stopRewardReceptionListeners();
+            rewardReceptionDayKey = dayKey;
+            rewardReceptionError = '';
+            const dayRef = doc(db, "rewardReceptionDays", dayKey);
+            rewardReceptionDayUnsubscribe = onSnapshot(dayRef, snapshot => {
+                rewardReceptionState = snapshot.exists()
+                    ? { currentSessionId: Math.max(1, Number(snapshot.data().currentSessionId) || 1) }
+                    : { currentSessionId: 1 };
+                if (currentTab === 'admin' && adminTab === 'retraits') render();
+            }, error => {
+                console.error("Lecture des séances de retrait impossible :", error);
+                rewardReceptionError = "Les séances de retrait ne sont pas accessibles. Vérifie les règles Firestore.";
+                if (currentTab === 'admin' && adminTab === 'retraits') render();
+            });
+            rewardReceptionSessionsUnsubscribe = onSnapshot(
+                collection(db, "rewardReceptionDays", dayKey, "sessions"),
+                snapshot => {
+                    rewardReceptionSessions = snapshot.docs
+                        .map(sessionDoc => ({ id: sessionDoc.id, ...sessionDoc.data() }))
+                        .sort((first, second) => Number(first.sessionId) - Number(second.sessionId));
+                    if (currentTab === 'admin' && adminTab === 'retraits') render();
+                },
+                error => {
+                    console.error("Lecture de l'historique des séances impossible :", error);
+                    rewardReceptionError = "L'historique des séances n'est pas accessible. Vérifie les règles Firestore.";
+                    if (currentTab === 'admin' && adminTab === 'retraits') render();
+                }
+            );
         }
 
         // --- ACTIONS EXPORTÉES DANS WINDOW POUR HTML ---
@@ -1011,8 +1363,15 @@
         window.closeModal = () => { selectedAtelierId = null; render(); };
         window.changeTab = tab => { 
             if (tab === 'defi_mois' && (!appSettings.challengeEnabled || appSettings.mode === 'classic')) return;
+            if (tab === 'recompenses' && (!appSettings.monthlyRewardsEnabled || !appSettings.monthlyRewards.length)) return;
             currentTab = tab; 
             render(); 
+        };
+        window.changeAdminTab = tab => {
+            if (!['gestion', 'retraits'].includes(tab)) return;
+            adminTab = tab;
+            if (tab === 'retraits') syncRewardReceptionListeners();
+            render();
         };
         window.changeLeaderboardTab = tab => { leaderboardTab = tab; render(); };
 
@@ -1089,6 +1448,303 @@
             return entries.every(entry => Number(halloweenInputs[entry.atelierId]) === entry.answer);
         }
 
+        function syncAdminRewardDraftFromForm() {
+            const form = document.querySelector('[data-monthly-rewards-form]');
+            if (!form) return;
+            const formData = new FormData(form);
+            adminRewardDraft = adminRewardDraft.map(reward => ({
+                id: reward.id,
+                points: Number(formData.get(`rewardPoints_${reward.id}`)) || reward.points,
+                title: String(formData.get(`rewardTitle_${reward.id}`) || reward.title).trim(),
+                description: String(formData.get(`rewardDescription_${reward.id}`) || '')
+            }));
+        }
+
+        window.addAdminMonthlyReward = function() {
+            syncAdminRewardDraftFromForm();
+            if (!adminAuthorized || adminRewardDraft.length >= 20) {
+                adminError = "Impossible d'ajouter un objectif (limite maximale atteinte ou accès admin manquant).";
+                render();
+                return;
+            }
+            const id = `reward_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+            adminRewardDraft.push({ id, points: 100, title: 'Nouveau cadeau', description: '' });
+            adminError = '';
+            render();
+        };
+
+        window.removeAdminMonthlyReward = function(button) {
+            syncAdminRewardDraftFromForm();
+            const rewardId = button.dataset.rewardId;
+            adminRewardDraft = adminRewardDraft.filter(reward => reward.id !== rewardId);
+            render();
+        };
+
+        window.uploadMonthlyRewardImage = async function(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const rewardId = input.dataset.rewardId;
+            syncAdminRewardDraftFromForm();
+            input.disabled = true;
+            try {
+                if (!adminAuthorized) throw new Error("Connexion administrateur requise.");
+                if (!adminRewardDraft.some(reward => reward.id === rewardId)) throw new Error("Cet objectif n'existe plus.");
+                const imageDataUrl = await compressWorkshopImage(file);
+                await setDoc(doc(db, "rewardImages", rewardId), { imageDataUrl, updatedAt: Date.now() });
+                rewardImages[rewardId] = imageDataUrl;
+                adminMessage = "Le visuel du cadeau a été enregistré.";
+                adminError = '';
+            } catch (error) {
+                console.error("Enregistrement du visuel du cadeau impossible :", error);
+                adminError = error.message || "Enregistrement impossible. Vérifie les règles Firestore.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.removeMonthlyRewardImage = async function(button) {
+            if (!adminAuthorized) return;
+            const rewardId = button.dataset.rewardId;
+            try {
+                await deleteDoc(doc(db, "rewardImages", rewardId));
+                delete rewardImages[rewardId];
+                adminMessage = "Le visuel du cadeau a été supprimé.";
+                adminError = '';
+            } catch (error) {
+                console.error("Suppression du visuel du cadeau impossible :", error);
+                adminError = "Suppression impossible. Vérifie les règles Firestore.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.saveAdminMonthlyRewards = async function(event) {
+            event.preventDefault();
+            syncAdminRewardDraftFromForm();
+            const formData = new FormData(event.currentTarget);
+            const enabled = formData.get('monthlyRewardsEnabled') === 'on';
+            const normalizedRewards = [];
+            const seenIds = new Set();
+            for (const reward of adminRewardDraft) {
+                const points = Number(reward.points);
+                const title = reward.title.trim();
+                if (!Number.isInteger(points) || points < 1 || points > 100000 || !title || title.length > 80
+                    || seenIds.has(reward.id)) {
+                    adminError = "Vérifie chaque objectif : le seuil doit être entier (1 à 100 000) et le nom du cadeau est obligatoire.";
+                    adminMessage = '';
+                    render();
+                    return;
+                }
+                seenIds.add(reward.id);
+                normalizedRewards.push({
+                    id: reward.id,
+                    points,
+                    title,
+                    description: reward.description.trim().slice(0, 240)
+                });
+            }
+            normalizedRewards.sort((first, second) => first.points - second.points);
+            try {
+                const removedRewardIds = appSettings.monthlyRewards
+                    .filter(reward => !normalizedRewards.some(nextReward => nextReward.id === reward.id))
+                    .map(reward => reward.id);
+                await savePublicConfiguration({
+                    monthlyRewardsEnabled: enabled,
+                    monthlyRewards: normalizedRewards
+                });
+                const failedImageDeletes = [];
+                for (const rewardId of removedRewardIds) {
+                    try {
+                        await deleteDoc(doc(db, "rewardImages", rewardId));
+                        delete rewardImages[rewardId];
+                    } catch (error) {
+                        console.error(`Suppression de l'image du cadeau ${rewardId} impossible :`, error);
+                        failedImageDeletes.push(rewardId);
+                    }
+                }
+                adminRewardDraft = JSON.parse(JSON.stringify(appSettings.monthlyRewards));
+                adminMessage = failedImageDeletes.length
+                    ? "Les objectifs sont enregistrés, mais certains visuels supprimés restent dans Firestore."
+                    : "La barre de progression et les objectifs cadeaux sont enregistrés.";
+                adminError = '';
+            } catch (error) {
+                console.error("Enregistrement des objectifs cadeaux impossible :", error);
+                adminError = "Enregistrement impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.renameAdminPlayer = async function(button) {
+            if (!adminAuthorized) return;
+            const row = button.closest('[data-player-row]');
+            const playerId = row && row.dataset.playerId;
+            const input = row && row.querySelector('input[name="playerPseudo"]');
+            const nextPseudo = input ? input.value.trim() : '';
+            if (!playerId || !nextPseudo || nextPseudo.length > 30) {
+                adminError = "Le pseudo doit contenir de 1 à 30 caractères.";
+                adminMessage = '';
+                render();
+                return;
+            }
+            try {
+                await updateDoc(doc(db, "users", playerId), {
+                    pseudo: nextPseudo,
+                    lastUpdated: Date.now()
+                });
+                if (playerId === userId) {
+                    pseudo = nextPseudo;
+                    localStorage.setItem('climbup_pseudo', pseudo);
+                }
+                adminMessage = "Le pseudo du joueur a été modifié.";
+                adminError = '';
+            } catch (error) {
+                console.error("Modification du pseudo impossible :", error);
+                adminError = "Modification impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.deleteAdminPlayer = async function(button) {
+            if (!adminAuthorized) return;
+            const row = button.closest('[data-player-row]');
+            const playerId = row && row.dataset.playerId;
+            const player = allUsersData.find(item => item.id === playerId);
+            if (!playerId || !player) return;
+            if (!window.confirm(`Supprimer le profil « ${player.pseudo || 'Anonyme'} » et ses points du classement partagé ? S'il revient sur le même appareil, sa progression locale pourra recréer son profil.`)) return;
+            try {
+                await deleteDoc(doc(db, "users", playerId));
+                allUsersData = allUsersData.filter(item => item.id !== playerId);
+                adminMessage = "Le profil et ses points ont été supprimés du classement partagé.";
+                adminError = '';
+            } catch (error) {
+                console.error("Suppression du profil impossible :", error);
+                adminError = "Suppression impossible. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+
+        window.openMonthlyReward = async function(rewardId, monthKey = getCurrentRewardMonthKey()) {
+            const reward = appSettings.monthlyRewards.find(item => item.id === rewardId);
+            const claimKey = reward && getMonthlyRewardClaimKey(reward.id, monthKey);
+            const isEarned = reward && getEarnedMonthlyRewardEntries(completedDefis, [reward])
+                .some(entry => entry.claimKey === claimKey);
+            if (!reward || !appSettings.monthlyRewardsEnabled || !isEarned || openedMonthlyRewards.includes(claimKey)
+                || openingMonthlyRewards.has(claimKey)) return;
+            openingMonthlyRewards.add(claimKey);
+            rewardError = '';
+            try {
+                await runTransaction(db, async transaction => {
+                    const profileRef = doc(db, "users", userId);
+                    const profileSnapshot = await transaction.get(profileRef);
+                    const profile = profileSnapshot.exists() ? profileSnapshot.data() : {};
+                    if (Array.isArray(profile.openedRewards) && profile.openedRewards.includes(claimKey)) {
+                        throw new Error("Ce cadeau a déjà été ouvert sur un autre appareil.");
+                    }
+                    transaction.set(profileRef, {
+                        pseudo,
+                        completedDefis,
+                        openedRewards: arrayUnion(claimKey),
+                        lastUpdated: Date.now()
+                    }, { merge: true });
+                });
+                openedMonthlyRewards = [...new Set([...openedMonthlyRewards, claimKey])];
+                localStorage.setItem(openedMonthlyRewardsStorageKey, JSON.stringify(openedMonthlyRewards));
+                selectedRewardId = reward.id;
+            } catch (error) {
+                console.error("Ouverture du cadeau impossible :", error);
+                if (error.message === "Ce cadeau a déjà été ouvert sur un autre appareil.") {
+                    openedMonthlyRewards = [...new Set([...openedMonthlyRewards, claimKey])];
+                    localStorage.setItem(openedMonthlyRewardsStorageKey, JSON.stringify(openedMonthlyRewards));
+                    rewardError = error.message;
+                } else {
+                    rewardError = "Le cadeau n'a pas pu être ouvert. Vérifie ta connexion et réessaie.";
+                }
+            } finally {
+                openingMonthlyRewards.delete(claimKey);
+            }
+            render();
+        };
+
+        window.closeMonthlyReward = function() {
+            selectedRewardId = null;
+            render();
+        };
+
+        window.startNextRewardReceptionSession = async function() {
+            if (!adminAuthorized || advancingRewardReceptionSession) return;
+            const activeEntries = getActiveRewardReceptionEntries();
+            if (!window.confirm(`Archiver la séance ${rewardReceptionState.currentSessionId} (${activeEntries.length} cadeau(x) restant(s)) et démarrer la suivante ?`)) return;
+            advancingRewardReceptionSession = true;
+            const dayKey = getCurrentRewardDayKey();
+            const now = Date.now();
+            try {
+                await runTransaction(db, async transaction => {
+                    const dayRef = doc(db, "rewardReceptionDays", dayKey);
+                    const daySnapshot = await transaction.get(dayRef);
+                    const currentSessionId = daySnapshot.exists()
+                        ? Math.max(1, Number(daySnapshot.data().currentSessionId) || 1)
+                        : 1;
+                    const sessionRef = doc(db, "rewardReceptionDays", dayKey, "sessions", String(currentSessionId));
+                    transaction.set(sessionRef, {
+                        sessionId: currentSessionId,
+                        endedAt: now,
+                        entries: activeEntries,
+                        claimIds: activeEntries.map(entry => entry.claimId)
+                    });
+                    transaction.set(dayRef, {
+                        currentSessionId: currentSessionId + 1,
+                        updatedAt: now
+                    }, { merge: true });
+                });
+                adminMessage = `Séance ${rewardReceptionState.currentSessionId} archivée. La séance suivante est prête pour les nouveaux retraits.`;
+                adminError = '';
+            } catch (error) {
+                console.error("Archivage de la séance de retrait impossible :", error);
+                adminError = "Impossible d'archiver la séance et d'en créer une nouvelle. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            } finally {
+                advancingRewardReceptionSession = false;
+            }
+            render();
+        };
+
+        window.markMonthlyRewardRedeemed = async function(button) {
+            if (!adminAuthorized) return;
+            const row = button.closest('[data-player-row]');
+            const playerId = row && row.dataset.playerId;
+            const rewardId = button.dataset.rewardId;
+            const monthKey = button.dataset.monthKey;
+            const player = allUsersData.find(item => item.id === playerId);
+            const reward = appSettings.monthlyRewards.find(item => item.id === rewardId);
+            const claimKey = reward && getMonthlyRewardClaimKey(reward.id, monthKey);
+            if (!player || !reward || !claimKey
+                || !getEarnedMonthlyRewardEntries(player.completedDefis || {}, [reward]).some(entry => entry.claimKey === claimKey)
+                || (Array.isArray(player.redeemedRewards) && player.redeemedRewards.includes(claimKey))
+                || claimingMonthlyRewards.has(claimKey)) return;
+
+            claimingMonthlyRewards.add(claimKey);
+            try {
+                await updateDoc(doc(db, "users", playerId), {
+                    redeemedRewards: arrayUnion(claimKey),
+                    lastUpdated: Date.now()
+                });
+                const redeemedRewards = Array.isArray(player.redeemedRewards) ? player.redeemedRewards : [];
+                player.redeemedRewards = [...new Set([...redeemedRewards, claimKey])];
+                adminMessage = `Le cadeau « ${reward.title} » de ${player.pseudo || 'ce joueur'} a été marqué comme récupéré.`;
+                adminError = '';
+            } catch (error) {
+                console.error("Validation du retrait de cadeau impossible :", error);
+                adminError = "Le cadeau n'a pas pu être marqué comme récupéré. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            } finally {
+                claimingMonthlyRewards.delete(claimKey);
+            }
+            render();
+        };
+
         function renderAdminPanel() {
             const notice = adminError
                 ? `<div role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">${escapeHtml(adminError)}</div>`
@@ -1115,6 +1771,108 @@
                             </form>
                             <p class="mt-4 text-center text-xs text-gray-400">Les joueurs n'ont pas besoin de compte pour utiliser l'application.</p>
                         </div>
+                    </section>
+                `;
+            }
+
+            const adminSectionNav = `
+                <nav class="flex flex-wrap gap-2 rounded-2xl bg-white p-2 shadow-sm" aria-label="Sections d'administration">
+                    <button type="button" onclick="changeAdminTab('gestion')" class="rounded-xl px-4 py-3 font-black transition ${adminTab === 'gestion' ? 'bg-purple-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-purple-50'}">Gestion et statistiques</button>
+                    <button type="button" onclick="changeAdminTab('retraits')" class="rounded-xl px-4 py-3 font-black transition ${adminTab === 'retraits' ? 'bg-purple-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-purple-50'}">Retraits de cadeaux</button>
+                </nav>
+            `;
+
+            if (adminTab === 'retraits') {
+                const activeEntries = getActiveRewardReceptionEntries();
+                const activeByPlayer = new Map();
+                activeEntries.forEach(entry => {
+                    if (!activeByPlayer.has(entry.playerId)) activeByPlayer.set(entry.playerId, []);
+                    activeByPlayer.get(entry.playerId).push(entry);
+                });
+                const pendingRewardCount = activeEntries.filter(entry => {
+                    const player = allUsersData.find(item => item.id === entry.playerId);
+                    return !(player && Array.isArray(player.redeemedRewards) && player.redeemedRewards.includes(entry.rewardClaimKey));
+                }).length;
+                const activeRows = [...activeByPlayer.entries()].map(([playerId, entries]) => `
+                    <div class="border-b border-gray-100 py-4 last:border-0">
+                        <p class="font-black text-gray-900">${escapeHtml(entries[0].pseudo)}</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            ${entries.map(entry => {
+                                const player = allUsersData.find(item => item.id === playerId);
+                                const redeemed = player && Array.isArray(player.redeemedRewards)
+                                    && player.redeemedRewards.includes(entry.rewardClaimKey);
+                                return `
+                                    <button type="button" data-player-row data-player-id="${escapeHtml(playerId)}" data-reward-id="${escapeHtml(entry.rewardId)}" data-month-key="${escapeHtml(entry.monthKey)}" onclick="markMonthlyRewardRedeemed(this)" aria-label="${escapeHtml(entries[0].pseudo)} · ${escapeHtml(entry.rewardTitle)} · ${redeemed ? 'récupéré' : 'à récupérer'}" ${redeemed ? 'disabled' : ''} class="rounded-xl px-4 py-3 text-left text-sm font-black text-white transition ${redeemed ? 'cursor-default bg-emerald-600' : 'bg-red-600 hover:bg-red-700'}">
+                                        🎁 ${escapeHtml(entry.rewardTitle)} · ${entry.points} pts
+                                    </button>
+                                `;
+                            }).join('')}
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500">${entries.map(entry => entry.monthKey).filter((value, index, list) => list.indexOf(value) === index).join(', ')}</p>
+                    </div>
+                `).join('');
+                const archivedSessions = rewardReceptionSessions.slice().reverse().map(session => {
+                    const entries = Array.isArray(session.entries) ? session.entries : [];
+                    const archivedByPlayer = new Map();
+                    entries.forEach(entry => {
+                        if (!archivedByPlayer.has(entry.playerId)) archivedByPlayer.set(entry.playerId, []);
+                        archivedByPlayer.get(entry.playerId).push(entry);
+                    });
+                    const archivedRows = [...archivedByPlayer.entries()].map(([playerId, playerEntries]) => `
+                        <div class="border-t border-gray-100 py-3 first:border-0">
+                            <p class="font-black text-gray-800">${escapeHtml(playerEntries[0].pseudo)}</p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                ${playerEntries.map(entry => {
+                                    const player = allUsersData.find(user => user.id === playerId);
+                                    const redeemed = player && Array.isArray(player.redeemedRewards)
+                                        && player.redeemedRewards.includes(entry.rewardClaimKey);
+                                    return `
+                                        <button type="button" data-player-row data-player-id="${escapeHtml(playerId)}" data-reward-id="${escapeHtml(entry.rewardId)}" data-month-key="${escapeHtml(entry.monthKey)}" onclick="markMonthlyRewardRedeemed(this)" aria-label="${escapeHtml(playerEntries[0].pseudo)} · ${escapeHtml(entry.rewardTitle)} · ${redeemed ? 'récupéré' : 'à récupérer'}" ${redeemed ? 'disabled' : ''} class="rounded-lg px-3 py-2 text-xs font-black text-white ${redeemed ? 'cursor-default bg-emerald-600' : 'bg-red-600 hover:bg-red-700'}">
+                                            🎁 ${escapeHtml(entry.rewardTitle)} · ${entry.points} pts
+                                        </button>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `).join('');
+                    const endedAt = Number(session.endedAt);
+                    return `
+                        <details class="rounded-xl border border-gray-200 bg-white p-4">
+                            <summary class="cursor-pointer font-black text-gray-800">Séance ${Number(session.sessionId) || ''} · ${entries.length} cadeau(x) · ${Number.isFinite(endedAt) ? new Date(endedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}</summary>
+                            <div class="mt-3">${archivedRows || '<p class="border-t border-gray-100 pt-3 text-sm text-gray-400">Aucun cadeau dans cette séance.</p>'}</div>
+                        </details>
+                    `;
+                }).join('');
+                return `
+                    <section class="space-y-5 p-4 pb-10">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div><h1 class="text-3xl font-black">Retraits de cadeaux</h1><p class="text-sm text-gray-500">${escapeHtml(adminUser.email || '')}</p></div>
+                            <button onclick="adminLogout()" class="rounded-xl border border-gray-200 bg-white px-4 py-2 font-bold text-gray-700">Déconnexion admin</button>
+                        </div>
+                        ${notice}
+                        ${adminSectionNav}
+                        ${rewardReceptionError ? `<div role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">${escapeHtml(rewardReceptionError)}</div>` : ''}
+                        ${appConfigError ? `<div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-800">${escapeHtml(appConfigError)}</div>` : ''}
+                        <section class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-black uppercase tracking-wider text-purple-600">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                    <h2 class="mt-1 text-2xl font-black">Séance ${rewardReceptionState.currentSessionId} · ${pendingRewardCount} cadeau(x) à traiter</h2>
+                                    <p class="mt-1 max-w-2xl text-sm text-gray-500">Les cadeaux gagnés et pas encore récupérés sont listés ici. « Séance suivante » archive la liste actuelle et ouvre une liste vierge pour la suite de la journée.</p>
+                                </div>
+                                <button type="button" onclick="startNextRewardReceptionSession()" class="shrink-0 rounded-xl bg-purple-600 px-5 py-3 font-black text-white shadow hover:bg-purple-700">Séance suivante</button>
+                            </div>
+                            <div class="max-h-[32rem] overflow-y-auto">
+                                ${activeRows || '<p class="py-8 text-center text-sm font-bold text-gray-400">Aucun nouveau cadeau à traiter dans cette séance.</p>'}
+                            </div>
+                        </section>
+                        <section class="space-y-3 rounded-2xl bg-gray-50 p-5">
+                            <div>
+                                <h2 class="text-xl font-black">Séances précédentes aujourd’hui</h2>
+                                <p class="text-sm text-gray-500">Les archives du jour restent consultables jusqu’à minuit.</p>
+                            </div>
+                            ${archivedSessions || '<p class="text-sm text-gray-400">Aucune séance archivée aujourd’hui.</p>'}
+                        </section>
                     </section>
                 `;
             }
@@ -1161,6 +1919,73 @@
                     </div>
                 `;
             })).join('');
+            const currentMonthlyRewards = appSettings.monthlyRewards
+                .slice()
+                .sort((first, second) => Number(first.points) - Number(second.points));
+            const allEarnedRewardEntries = allUsersData.flatMap(user =>
+                getEarnedMonthlyRewardEntries(user.completedDefis || {}).map(entry => ({ ...entry, user }))
+            );
+            const monthlyRewardStats = currentMonthlyRewards.map(reward => {
+                const rewardEntries = allEarnedRewardEntries.filter(entry => entry.reward.id === reward.id);
+                const redeemedCount = rewardEntries.filter(entry =>
+                    Array.isArray(entry.user.redeemedRewards) && entry.user.redeemedRewards.includes(entry.claimKey)
+                ).length;
+                return `
+                    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-gray-100 py-3 last:border-0">
+                        <div class="min-w-0">
+                            <p class="truncate font-bold text-gray-800">${escapeHtml(reward.title)}</p>
+                            <p class="text-xs text-gray-500">Objectif : ${reward.points} pts · ${rewardEntries.length} gagné(s) · ${redeemedCount} récupéré(s)</p>
+                        </div>
+                        <span class="rounded-full bg-purple-50 px-3 py-1 text-sm font-black text-purple-700">${rewardEntries.length - redeemedCount} à récupérer</span>
+                    </div>
+                `;
+            }).join('');
+            const playerRows = [...allUsersData]
+                .sort((first, second) => String(first.pseudo || '').localeCompare(String(second.pseudo || ''), 'fr'))
+                .map(user => `
+                    <div data-player-row data-player-id="${escapeHtml(user.id)}" class="grid gap-3 border-b border-gray-100 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <div class="min-w-0">
+                            <label class="sr-only" for="player-pseudo-${escapeHtml(user.id)}">Pseudo du joueur</label>
+                            <input id="player-pseudo-${escapeHtml(user.id)}" name="playerPseudo" maxlength="30" value="${escapeHtml(user.pseudo || '')}" class="w-full rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-800" />
+                            <p class="mt-1 text-xs text-gray-500">${calculateUserScores(user.completedDefis || {}).total} pts · profil ${escapeHtml(String(user.id).slice(0, 14))}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="renameAdminPlayer(this)" class="flex-1 rounded-lg bg-purple-50 px-3 py-2 text-sm font-bold text-purple-700 sm:flex-none">Renommer</button>
+                            <button type="button" onclick="deleteAdminPlayer(this)" class="flex-1 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 sm:flex-none">Supprimer</button>
+                        </div>
+                    </div>
+                `).join('');
+            const rewardEditorRows = adminRewardDraft
+                .slice()
+                .sort((first, second) => Number(first.points) - Number(second.points))
+                .map(reward => `
+                    <article class="grid gap-4 rounded-2xl border border-purple-100 bg-purple-50/40 p-4 lg:grid-cols-[minmax(0,1fr)_180px]">
+                        <div class="space-y-3">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label class="text-sm font-bold text-gray-600">Objectif en points
+                                    <input name="rewardPoints_${escapeHtml(reward.id)}" type="number" min="1" max="100000" step="1" required value="${escapeHtml(reward.points)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2" />
+                                </label>
+                                <label class="text-sm font-bold text-gray-600">Nom du cadeau
+                                    <input name="rewardTitle_${escapeHtml(reward.id)}" maxlength="80" required value="${escapeHtml(reward.title)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2" />
+                                </label>
+                            </div>
+                            <label class="block text-sm font-bold text-gray-600">Message affiché à l'ouverture
+                                <textarea name="rewardDescription_${escapeHtml(reward.id)}" maxlength="240" rows="2" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">${escapeHtml(reward.description || '')}</textarea>
+                            </label>
+                            <button type="button" data-reward-id="${escapeHtml(reward.id)}" onclick="removeAdminMonthlyReward(this)" class="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Supprimer cet objectif</button>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex h-32 items-center justify-center overflow-hidden rounded-xl border border-white bg-white">
+                                ${rewardImages[reward.id] ? `<img src="${escapeHtml(rewardImages[reward.id])}" alt="Visuel du cadeau ${escapeHtml(reward.title)}" class="h-full w-full object-cover" />` : '<span class="text-5xl" aria-hidden="true">🎁</span>'}
+                            </div>
+                            <label class="block text-xs font-bold text-gray-600">Visuel à révéler
+                                <input data-reward-id="${escapeHtml(reward.id)}" type="file" accept="image/*" onchange="uploadMonthlyRewardImage(this)" class="mt-1 block w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-purple-100 file:px-2 file:py-2 file:font-bold file:text-purple-700" />
+                            </label>
+                            ${rewardImages[reward.id] ? `<button type="button" data-reward-id="${escapeHtml(reward.id)}" onclick="removeMonthlyRewardImage(this)" class="text-xs font-bold text-red-700 underline">Retirer le visuel</button>` : ''}
+                            <p class="text-[11px] text-gray-500">JPEG compressé, conservé dans Firestore.</p>
+                        </div>
+                    </article>
+                `).join('');
             const eventChallengeRows = LEVEL_KEYS.map(level => {
                 const entries = adminEventDraft.levels[level] || [];
                 return `
@@ -1190,6 +2015,7 @@
                     </div>
                     ${notice}
                     ${appConfigError ? `<div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-800">${escapeHtml(appConfigError)}</div>` : ''}
+                    ${adminSectionNav}
 
                     <div class="grid gap-4 sm:grid-cols-3">
                         <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Profils participants</p><p class="mt-2 text-3xl font-black">${participantCount}</p></article>
@@ -1197,6 +2023,15 @@
                         <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Défis validés / possibilités</p><p class="mt-2 text-3xl font-black">${completionRate}%</p></article>
                     </div>
                     <p class="text-xs text-gray-500">Les statistiques comptent les profils enregistrés dans Firestore ; un même joueur peut avoir plusieurs profils sur différents appareils.</p>
+                    <section class="rounded-2xl bg-white p-5 shadow-sm" aria-label="Statistiques des cadeaux">
+                        <div class="mb-2">
+                            <h2 class="text-xl font-black">Historique des cadeaux</h2>
+                            <p class="text-sm text-gray-500">Les statistiques comptent le nombre total de cadeaux débloqués et récupérés. Les cadeaux restent réclamables après le changement de mois.</p>
+                        </div>
+                        <div class="max-h-72 overflow-y-auto">
+                            ${monthlyRewardStats || '<p class="py-4 text-sm text-gray-400">Aucun palier cadeau configuré.</p>'}
+                        </div>
+                    </section>
 
                     <form onsubmit="saveAdminSettings(event)" class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
                         <h2 class="text-xl font-black">Mode et apparence</h2>
@@ -1211,6 +2046,36 @@
                         <label class="flex items-center gap-3 font-bold"><input name="challengeEnabled" type="checkbox" ${appSettings.challengeEnabled ? 'checked' : ''} class="h-5 w-5 accent-purple-600" /> Activer le défi saisonnier</label>
                         <button class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Publier les paramètres</button>
                     </form>
+
+                    <section class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+                        <div>
+                            <h2 class="text-xl font-black">Progression et cadeaux mensuels</h2>
+                            <p class="text-sm text-gray-500">Chaque joueur repart à zéro au début du mois. Un cadeau gagné peut être ouvert dans l'application, puis présenté à l'accueil.</p>
+                        </div>
+                        <form data-monthly-rewards-form onsubmit="saveAdminMonthlyRewards(event)" class="space-y-4">
+                            <label class="flex items-center gap-3 font-bold text-gray-700">
+                                <input name="monthlyRewardsEnabled" type="checkbox" ${appSettings.monthlyRewardsEnabled ? 'checked' : ''} class="h-5 w-5 accent-purple-600" />
+                                Afficher la progression et les cadeaux aux joueurs
+                            </label>
+                            <div class="space-y-3">
+                                ${rewardEditorRows || '<p class="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">Aucun palier cadeau. Ajoute un objectif pour commencer.</p>'}
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <button type="button" onclick="addAdminMonthlyReward()" class="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 font-bold text-purple-700">+ Ajouter un palier cadeau (${adminRewardDraft.length}/20)</button>
+                                <button type="submit" class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Enregistrer la progression</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="rounded-2xl bg-white p-5 shadow-sm">
+                        <div class="mb-3">
+                            <h2 class="text-xl font-black">Gestion des joueurs</h2>
+                            <p class="text-sm text-gray-500">Renommer un pseudo problématique ou supprimer son profil et ses points du classement partagé. La gestion des retraits est dans l'onglet dédié.</p>
+                        </div>
+                        <div class="max-h-[32rem] overflow-y-auto">
+                            ${playerRows || '<p class="py-4 text-sm text-gray-400">Aucun profil joueur enregistré.</p>'}
+                        </div>
+                    </section>
 
                     <div class="grid gap-6 xl:grid-cols-2">
                         <div class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
@@ -1314,13 +2179,13 @@
 
             if (!isLogged && currentTab !== 'admin') {
                 app.innerHTML = `
-                    <div class="min-h-screen bg-gradient-to-br from-purple-600 to-teal-400 flex items-center justify-center p-4">
-                        <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl text-center">
-                            <div class="w-24 h-24 bg-gradient-to-br from-purple-500 to-teal-400 rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg">
-                                <i data-lucide="trophy" class="text-white w-12 h-12"></i>
+                    <div class="app-shell theme-classic min-h-screen flex items-center justify-center p-4">
+                        <div class="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 p-8 text-center shadow-[0_24px_70px_rgba(76,29,149,0.16)] backdrop-blur-xl">
+                            <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-teal-400 shadow-lg shadow-purple-200 ring-8 ring-purple-50">
+                                <i data-lucide="mountain" class="text-white w-12 h-12"></i>
                             </div>
-                            <h1 onclick="openAdminGate()" class="text-3xl font-black text-gray-800 mb-2">Climb Up</h1>
-                            <p class="text-gray-500 mb-8 font-medium">Fun Climbing - Défis</p>
+                            <h1 onclick="openAdminGate()" class="mb-2 bg-gradient-to-r from-purple-700 to-teal-500 bg-clip-text text-3xl font-black text-transparent">Climb Up</h1>
+                            <p class="mb-8 font-medium text-gray-500">Fun Climbing <span class="mx-1 text-purple-300">•</span> Défis</p>
                             
                             <form onsubmit="handleLogin(event)" class="space-y-4">
                                 <div>
@@ -1338,24 +2203,96 @@
                 const totalScore = myScores.total; 
                 
                 const themeStyles = {
-                    classic: { page: 'bg-gray-50 text-gray-800', header: 'bg-white shadow-sm', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-teal-500', badge: 'bg-purple-100 border border-purple-200 text-purple-700', icon: 'trophy', accent: 'text-purple-600' },
-                    halloween: { page: 'bg-slate-950 text-slate-100 halloween-transition', header: 'bg-slate-900 border-b border-orange-500/30', logo: 'bg-gradient-to-r from-orange-500 to-purple-600 text-orange-400', badge: 'bg-orange-950 border border-orange-500/50 text-orange-400', icon: 'ghost', accent: 'text-orange-400' },
-                    christmas: { page: 'bg-sky-50 text-slate-800', header: 'bg-white border-b border-red-200 shadow-sm', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-emerald-600', badge: 'bg-red-50 border border-red-200 text-red-700', icon: 'snowflake', accent: 'text-red-600' },
-                    easter: { page: 'bg-emerald-50 text-slate-800', header: 'bg-white border-b border-purple-200 shadow-sm', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-500', badge: 'bg-purple-50 border border-purple-200 text-purple-700', icon: 'egg', accent: 'text-purple-600' }
+                    classic: { page: 'bg-gray-50 text-gray-800', header: 'bg-white/90 shadow-[0_8px_28px_rgba(30,41,59,0.08)] backdrop-blur-xl border-b border-white', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-violet-700 via-purple-600 to-teal-500', badge: 'bg-white border border-purple-100 text-purple-700 shadow-md shadow-purple-100/70', icon: 'mountain', accent: 'text-purple-600' },
+                    halloween: { page: 'bg-slate-950 text-slate-100', header: 'bg-slate-900/90 border-b border-orange-500/30 backdrop-blur-xl', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-purple-400', badge: 'bg-orange-950 border border-orange-500/50 text-orange-400', icon: 'ghost', accent: 'text-orange-400' },
+                    christmas: { page: 'bg-sky-50 text-slate-800', header: 'bg-white/90 border-b border-red-100 shadow-[0_8px_28px_rgba(30,41,59,0.08)] backdrop-blur-xl', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-emerald-600', badge: 'bg-white border border-red-100 text-red-700 shadow-md shadow-red-100/70', icon: 'snowflake', accent: 'text-red-600' },
+                    easter: { page: 'bg-emerald-50 text-slate-800', header: 'bg-white/90 border-b border-purple-100 shadow-[0_8px_28px_rgba(30,41,59,0.08)] backdrop-blur-xl', logo: 'bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-500', badge: 'bg-white border border-purple-100 text-purple-700 shadow-md shadow-purple-100/70', icon: 'egg', accent: 'text-purple-600' }
                 };
                 const theme = themeStyles[skin] || themeStyles.classic;
-                const eventTitle = activeEventInfo ? `${activeEventInfo.emoji} ${activeEventInfo.label}` : '';
+                const themeEventInfo = EVENT_INFO[skin];
+                const eventTitle = themeEventInfo ? `${themeEventInfo.emoji} ${themeEventInfo.label}` : '';
+                const seasonalDecor = skin === 'christmas'
+                    ? `
+                        <div class="seasonal-snow"></div>
+                        <div class="christmas-lights"></div>
+                        <span class="seasonal-ornament top-36 right-[7%] text-7xl md:text-8xl">⛄</span>
+                        <span class="seasonal-ornament top-[34rem] left-[5%] text-7xl md:text-8xl">🎄</span>
+                        <span class="seasonal-ornament top-[48rem] right-[8%] text-6xl">🎁</span>
+                        <span class="seasonal-ornament top-[68rem] left-[9%] text-5xl">🦌</span>
+                        <span class="seasonal-ornament top-[88rem] right-[6%] text-6xl">🎅</span>
+                        <span class="seasonal-ornament top-[112rem] left-[6%] text-6xl">🎄</span>
+                        <span class="seasonal-ornament top-[136rem] right-[8%] text-6xl">⛄</span>
+                        <span class="seasonal-ornament top-[160rem] left-[8%] text-6xl">🎁</span>
+                        <span class="seasonal-ornament top-[184rem] right-[5%] text-6xl">🦌</span>
+                        <span class="seasonal-ornament top-40 left-[14%] text-3xl">❄️</span>
+                        <span class="seasonal-ornament top-[27rem] right-[24%] text-3xl">❄️</span>
+                        <span class="seasonal-ornament top-[60rem] left-[28%] text-3xl">✨</span>
+                        <span class="seasonal-ornament top-[82rem] right-[28%] text-3xl">❄️</span>
+                        <span class="seasonal-ornament top-[104rem] left-[22%] text-3xl">❄️</span>
+                        <span class="seasonal-ornament top-[130rem] right-[22%] text-3xl">✨</span>
+                        <span class="seasonal-ornament top-[154rem] left-[28%] text-3xl">❄️</span>
+                    `
+                    : skin === 'halloween'
+                        ? `
+                            <div class="halloween-moon"><span class="halloween-moon-face"></span></div>
+                            <svg class="absolute left-0 top-20 h-40 w-40 text-purple-300/60" viewBox="0 0 160 160" aria-hidden="true">
+                                <path d="M0 0h110M0 0v110M0 0l100 100M12 0c0 12-12 12-12 24m36-24c0 24-24 24-24 48m60-48c0 36-36 36-36 72m60-72c0 48-48 48-48 96M0 12c12 0 12-12 24-12m-24 36c24 0 24-24 48-24m-48 60c36 0 36-36 72-36m-72 60c48 0 48-48 96-48" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <svg class="absolute right-0 top-20 h-40 w-40 rotate-90 text-purple-300/60" viewBox="0 0 160 160" aria-hidden="true">
+                                <path d="M0 0h110M0 0v110M0 0l100 100M12 0c0 12-12 12-12 24m36-24c0 24-24 24-24 48m60-48c0 36-36 36-36 72m60-72c0 48-48 48-48 96M0 12c12 0 12-12 24-12m-24 36c24 0 24-24 48-24m-48 60c36 0 36-36 72-36m-72 60c48 0 48-48 96-48" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span class="seasonal-ornament top-36 left-[8%] text-7xl md:text-8xl">🎃</span>
+                            <span class="seasonal-ornament top-[29rem] right-[8%] text-7xl md:text-8xl">👻</span>
+                            <span class="seasonal-ornament top-[45rem] left-[5%] text-6xl">🕷️</span>
+                            <span class="seasonal-ornament top-[62rem] right-[6%] text-7xl">🦇</span>
+                            <span class="seasonal-ornament top-[78rem] left-[7%] text-7xl">🎃</span>
+                            <span class="seasonal-ornament top-[96rem] right-[7%] text-6xl">🧙</span>
+                            <span class="seasonal-ornament top-[114rem] left-[6%] text-7xl">👻</span>
+                            <span class="seasonal-ornament top-[132rem] right-[6%] text-7xl">🕸️</span>
+                            <span class="seasonal-ornament top-[150rem] left-[8%] text-7xl">🎃</span>
+                            <span class="seasonal-ornament top-[168rem] right-[7%] text-7xl">🦇</span>
+                            <span class="seasonal-ornament top-[186rem] left-[6%] text-7xl">🧟</span>
+                            <span class="seasonal-ornament top-[204rem] right-[6%] text-7xl">👻</span>
+                            <span class="seasonal-ornament top-[222rem] left-[8%] text-7xl">🎃</span>
+                            <svg class="haunted-silhouette" viewBox="0 0 1440 240" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+                                <path fill="currentColor" d="M0 240V150h45v-38h35v38h34V80l36-35 36 35v160h42V125h52v-38l38-30 38 30v153h44V110h30V70h14V40h14v30h14v40h43v-50l32-32 32 32v50h40V90h25V45l28-28 28 28v45h45V140h40V95l34-24 34 24v145h44V110h30V60l37-36 37 36v50h42V140h38V88l34-25 34 25v152h90V0h60v240z"/>
+                                <circle cx="185" cy="145" r="13" fill="#fb923c"/><circle cx="185" cy="145" r="6" fill="#111827"/>
+                                <circle cx="510" cy="155" r="11" fill="#fb923c"/><circle cx="510" cy="155" r="5" fill="#111827"/>
+                                <circle cx="1050" cy="150" r="13" fill="#fb923c"/><circle cx="1050" cy="150" r="6" fill="#111827"/>
+                            </svg>
+                        `
+                        : skin === 'easter'
+                            ? `
+                                <span class="seasonal-ornament top-36 right-[7%] text-7xl md:text-8xl">🐰</span>
+                                <span class="seasonal-ornament top-[30rem] left-[6%] text-7xl">🪺</span>
+                                <span class="seasonal-ornament top-[46rem] right-[6%] text-7xl">🌷</span>
+                                <span class="seasonal-ornament top-[64rem] left-[8%] text-7xl">🐣</span>
+                                <span class="seasonal-ornament top-[82rem] right-[7%] text-7xl">🦋</span>
+                                <span class="seasonal-ornament top-[100rem] left-[6%] text-7xl">🐰</span>
+                                <span class="seasonal-ornament top-[118rem] right-[7%] text-7xl">🌼</span>
+                                <span class="seasonal-ornament top-[136rem] left-[7%] text-7xl">🪺</span>
+                                <span class="seasonal-ornament top-[154rem] right-[7%] text-7xl">🐣</span>
+                                <span class="seasonal-ornament top-[172rem] left-[7%] text-7xl">🌷</span>
+                                <span class="easter-egg left-[24%] top-44 bg-pink-300"></span>
+                                <span class="easter-egg right-[23%] top-[25rem] bg-sky-300"></span>
+                                <span class="easter-egg left-[25%] top-[58rem] bg-yellow-300"></span>
+                                <span class="easter-egg right-[24%] top-[92rem] bg-purple-300"></span>
+                                <span class="easter-egg left-[23%] top-[126rem] bg-emerald-300"></span>
+                                <span class="easter-egg right-[23%] top-[160rem] bg-rose-300"></span>
+                            `
+                            : '';
 
                 let html = `
-                    <div class="min-h-screen ${theme.page} pb-24 md:pb-8">
-                        <header class="${theme.header} sticky top-0 z-10 px-4 py-3 flex justify-between items-center transition-colors duration-500">
-                            <div class="flex items-center gap-2">
-                                <div class="w-8 h-8 ${isHalloween ? 'bg-orange-600' : skin === 'christmas' ? 'bg-red-600' : skin === 'easter' ? 'bg-purple-600' : 'bg-gradient-to-br from-purple-600 to-teal-500'} rounded-full flex items-center justify-center">
-                                    <i data-lucide="${isSeasonal && activeEventInfo ? activeEventInfo.icon : theme.icon}" class="text-white w-4 h-4"></i>
+                    <div class="app-shell theme-${skin} relative min-h-screen ${theme.page} pb-24 md:pb-8">
+                        <div class="seasonal-decor" aria-hidden="true">${seasonalDecor}</div>
+                        <header class="app-header ${theme.header} px-4 py-3 flex justify-between items-center gap-3 transition-colors duration-500">
+                            <div class="flex min-w-0 flex-1 items-center gap-2">
+                                <div class="w-9 h-9 ${isHalloween ? 'bg-gradient-to-br from-orange-500 to-purple-700' : skin === 'christmas' ? 'bg-gradient-to-br from-red-500 to-emerald-600' : skin === 'easter' ? 'bg-gradient-to-br from-purple-500 to-pink-500' : 'bg-gradient-to-br from-purple-600 to-teal-500'} rounded-full flex items-center justify-center shadow-md ring-2 ring-white/80">
+                                    <i data-lucide="${isSeasonal && themeEventInfo ? themeEventInfo.icon : theme.icon}" class="text-white w-[18px] h-[18px]"></i>
                                 </div>
-                                <span onclick="openAdminGate()" class="font-black text-xl ${theme.logo}">Climb Up ${isSeasonal ? eventTitle : ''}</span>
+                                <span onclick="openAdminGate()" class="min-w-0 truncate font-black text-base sm:text-xl tracking-tight ${theme.logo}">Climb Up ${isSeasonal ? eventTitle : ''}</span>
                             </div>
-                            <div class="flex items-center gap-4">
+                            <div class="flex shrink-0 items-center gap-2 sm:gap-4">
                                 <div class="text-right hidden md:block">
                                     <p class="text-xs ${isHalloween ? 'text-orange-400' : 'text-gray-500'} font-bold uppercase">${escapeHtml(pseudo)}</p>
                                 </div>
@@ -1366,32 +2303,91 @@
                             </div>
                         </header>
                         
-                        <div class="hidden md:flex justify-center gap-4 p-6">
-                            <button onclick="changeTab('carte')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'carte' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
+                        <div class="app-desktop-nav hidden md:flex">
+                            <button onclick="changeTab('carte')" class="px-4 lg:px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'carte' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
                                 <i data-lucide="map"></i> La Carte
                             </button>
-                            ${challengeAvailable ? `<button onclick="changeTab('defi_mois')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'bg-slate-800 text-orange-400 border border-orange-500/30 shadow'}">
+                            ${challengeAvailable ? `<button onclick="changeTab('defi_mois')" class="px-4 lg:px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'defi_mois' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'bg-slate-800 text-orange-400 border border-orange-500/30 shadow'}">
                                 <i data-lucide="${activeEventInfo.icon}"></i> Défi ${activeEventInfo.label} ${activeEventInfo.emoji}
                             </button>` : ''}
-                            <button onclick="changeTab('classement')" class="px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'classement' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
+                            <button onclick="changeTab('classement')" class="px-4 lg:px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'classement' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
                                 <i data-lucide="medal"></i> Classement
                             </button>
+                            ${appSettings.monthlyRewardsEnabled && appSettings.monthlyRewards.length ? `<button onclick="changeTab('recompenses')" class="px-4 lg:px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'recompenses' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-gray-600 shadow'}">
+                                <i data-lucide="gift"></i> Cadeaux
+                            </button>` : ''}
                         </div>
                         
-                        <main class="max-w-6xl mx-auto md:px-6">
+                        <main class="app-main ${isHalloween ? 'halloween-transition' : ''} max-w-6xl mx-auto md:px-6">
                 `;
+
+                if (!isAdminView && appSettings.monthlyRewardsEnabled && appSettings.monthlyRewards.length) {
+                    const monthlyPoints = calculateUserScores(completedDefis).monthly;
+                    const monthKey = getCurrentRewardMonthKey();
+                    const sortedRewards = appSettings.monthlyRewards.slice().sort((first, second) => first.points - second.points);
+                    const nextReward = sortedRewards.find(reward => monthlyPoints < reward.points);
+                    const progressTarget = sortedRewards[sortedRewards.length - 1].points;
+                    const progressPercent = Math.min(100, Math.round(monthlyPoints / progressTarget * 100));
+                    const progressPanelClass = isHalloween
+                        ? 'border-orange-500/30 bg-slate-900/90 text-slate-100'
+                        : 'border-purple-100 bg-white/95 text-slate-800';
+                    html += `
+                        <section class="mx-4 mt-4 rounded-3xl border p-5 shadow-lg ${progressPanelClass}" aria-label="Progression mensuelle vers les cadeaux">
+                            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-black uppercase tracking-[0.18em] ${theme.accent}">Objectifs du mois · ${monthKey}</p>
+                                    <h2 class="mt-1 text-xl font-black">Ta progression cadeaux</h2>
+                                    <p class="mt-1 text-sm ${isHalloween ? 'text-slate-300' : 'text-gray-500'}">${monthlyPoints} / ${progressTarget} pts ce mois-ci${nextReward ? ` · prochain cadeau à ${nextReward.points} pts` : ' · tous les cadeaux débloqués'}</p>
+                                </div>
+                                <span class="rounded-full px-3 py-1 text-sm font-black ${isHalloween ? 'bg-orange-950 text-orange-300' : 'bg-purple-50 text-purple-700'}">${nextReward ? `${progressPercent}%` : 'Tous débloqués !'}</span>
+                            </div>
+                            <div class="relative mx-5 mb-4 mt-16">
+                                ${sortedRewards.map(reward => {
+                                    const unlocked = monthlyPoints >= reward.points;
+                                    const opened = openedMonthlyRewards.includes(getMonthlyRewardClaimKey(reward.id, monthKey));
+                                    const position = Math.min(100, Math.max(0, reward.points / progressTarget * 100));
+                                    return `
+                                        <button type="button" aria-label="Cadeau à ${reward.points} points${opened ? ', déjà ouvert' : unlocked ? ', disponible à ouvrir' : ', verrouillé'}" title="${reward.points} points" onclick="openMonthlyReward('${escapeHtml(reward.id)}')" ${!unlocked || opened ? 'disabled' : ''} class="absolute -top-14 flex min-w-[64px] -translate-x-1/2 flex-col items-center gap-0.5 rounded-2xl border px-2 py-1 transition ${unlocked && !opened ? (isHalloween ? 'border-orange-400/50 bg-orange-950/90 hover:bg-orange-900' : 'border-purple-200 bg-purple-50 hover:bg-purple-100') : (isHalloween ? 'border-slate-700 bg-slate-800/90 opacity-75' : 'border-gray-200 bg-gray-50 opacity-75')}" style="left:${position}%">
+                                            <span class="text-xl leading-6" aria-hidden="true">🎁</span>
+                                            <span class="text-[11px] font-black ${isHalloween ? 'text-slate-200' : 'text-gray-600'}">${reward.points} pts</span>
+                                        </button>
+                                    `;
+                                }).join('')}
+                                <div role="progressbar" aria-label="Progression mensuelle vers le dernier cadeau" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPercent}" class="h-3 overflow-hidden rounded-full ${isHalloween ? 'bg-slate-800' : 'bg-purple-100'}">
+                                    <div class="h-full rounded-full transition-[width] duration-700 ease-out ${isHalloween ? 'bg-gradient-to-r from-orange-500 to-amber-300' : 'bg-gradient-to-r from-violet-600 to-teal-400'}" style="width:${progressPercent}%"></div>
+                                </div>
+                            </div>
+                            ${rewardError ? `<p role="alert" class="mt-3 text-sm font-bold text-red-500">${escapeHtml(rewardError)}</p>` : ''}
+                        </section>
+                    `;
+                }
 
                 if (currentTab === 'admin') {
                     html += renderAdminPanel();
                 } else if (currentTab === 'carte') {
-                    html += `<div class="grid grid-cols-2 gap-3 sm:gap-4 p-4 md:grid-cols-4 lg:grid-cols-5">`;
+                    html += `
+                        <section class="relative isolate overflow-hidden px-4 pb-4 pt-6 md:px-2 md:pt-8">
+                            <img class="map-watermark" src="./Logo%20climb%20up.jpeg" alt="" aria-hidden="true" />
+                            <div class="map-intro-panel mb-5 flex items-center justify-between gap-4">
+                                <div>
+                                    <p class="mb-1 text-xs font-black uppercase tracking-[0.2em] ${theme.accent}">${isSeasonal ? escapeHtml(themeEventInfo.label) : 'Climb Up'}</p>
+                                    <h1 class="text-xl font-black tracking-tight sm:text-3xl">Ta carte des défis</h1>
+                                    <p class="mt-1 text-sm ${isHalloween ? 'text-slate-300' : 'text-gray-500'}">Choisis un atelier et fais grimper ton score.</p>
+                                </div>
+                                <div class="shrink-0 rounded-2xl border border-purple-100 bg-white/80 px-3 py-2 text-right shadow-sm sm:px-4">
+                                    <span class="block text-xl font-black ${theme.accent}">${ATELIERS.length}</span>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">ateliers</span>
+                                </div>
+                            </div>
+                            <div class="relative z-10 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
+                    `;
                     ATELIERS.forEach(atelier => {
                         const totalDefis = atelier.defis.length;
                         const completed = atelier.defis.filter(d => completedDefis[d.id]).length;
                         const isAllCompleted = completed === totalDefis;
                         
                         html += `
-                            <button onclick="openModal('${atelier.id}')" class="relative overflow-hidden rounded-3xl aspect-square shadow-md transform transition-transform active:scale-95 ${isAllCompleted ? 'ring-4 ring-teal-400 ring-offset-2' : ''}">
+                            <button onclick="openModal('${atelier.id}')" class="map-workshop-card relative aspect-square overflow-hidden rounded-3xl transform transition-all duration-300 active:scale-95 hover:scale-[1.02] ${isAllCompleted ? 'ring-4 ring-teal-400 ring-offset-2' : ''}">
                                 ${getAtelierPreview(atelier)}
                                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent flex flex-col justify-end p-3 sm:p-4">
                                     <h3 class="text-white font-bold text-sm sm:text-base mb-2 drop-shadow-md text-left leading-tight">${escapeHtml(atelier.name)}</h3>
@@ -1403,7 +2399,7 @@
                             </button>
                         `;
                     });
-                    html += `</div>`;
+                    html += `</div></section>`;
                 } 
                 else if (currentTab === 'defi_mois') {
                     const eventConfig = getCurrentEvent();
@@ -1497,8 +2493,44 @@
                             </div>
                         `;
                     }
-                } 
-                else {
+                } else if (currentTab === 'recompenses') {
+                    const currentProfile = allUsersData.find(user => user.id === userId);
+                    const redeemedRewards = Array.isArray(currentProfile && currentProfile.redeemedRewards)
+                        ? currentProfile.redeemedRewards
+                        : [];
+                    const earnedRewards = getEarnedMonthlyRewardEntries(completedDefis);
+                    html += `
+                        <section class="mx-4 mt-6 space-y-4 rounded-3xl border border-purple-100 bg-white/95 p-5 shadow-lg sm:p-7" aria-label="Mes cadeaux gagnés">
+                            <div>
+                                <p class="text-xs font-black uppercase tracking-[0.18em] text-purple-600">${escapeHtml(pseudo)} · Historique</p>
+                                <h1 class="mt-1 text-2xl font-black text-slate-900">Mes cadeaux</h1>
+                                <p class="mt-2 text-sm text-gray-600">Présente à l'accueil les cadeaux ouverts pour les récupérer. L'équipe les marquera comme récupérés.</p>
+                            </div>
+                            ${earnedRewards.length ? `<div class="space-y-3">
+                                ${earnedRewards.map(({ reward, monthKey, claimKey }) => {
+                                    const opened = openedMonthlyRewards.includes(claimKey);
+                                    const redeemed = redeemedRewards.includes(claimKey);
+                                    return `
+                                        <article class="flex flex-col gap-3 rounded-2xl border border-purple-100 bg-purple-50/60 p-4 sm:flex-row sm:items-center">
+                                            <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+                                                ${opened && rewardImages[reward.id]
+                                                    ? `<img src="${escapeHtml(rewardImages[reward.id])}" alt="${escapeHtml(reward.title)}" class="h-full w-full object-cover" />`
+                                                    : `<span class="text-4xl" aria-hidden="true">🎁</span>`}
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                ${opened ? `<h2 class="font-black text-slate-900">${escapeHtml(reward.title)}</h2>` : '<h2 class="font-black text-slate-900">Cadeau à révéler</h2>'}
+                                                <p class="mt-1 text-sm text-gray-600">${monthKey} · ${reward.points} pts · ${opened ? escapeHtml(reward.description || 'Cadeau obtenu') : 'Ouvre le cadeau pour découvrir ce que tu as gagné.'}</p>
+                                                <p class="mt-2 text-xs font-black uppercase tracking-wide ${redeemed ? 'text-emerald-700' : 'text-amber-700'}">${redeemed ? 'Récupéré à l’accueil' : opened ? 'À présenter à l’accueil' : 'À révéler'}</p>
+                                            </div>
+                                            ${!opened ? `<button type="button" onclick="openMonthlyReward('${escapeHtml(reward.id)}', '${escapeHtml(monthKey)}')" class="rounded-xl bg-purple-600 px-4 py-3 text-sm font-black text-white hover:bg-purple-700">Ouvrir mon cadeau</button>` : ''}
+                                        </article>
+                                    `;
+                                }).join('')}
+                            </div>` : '<div class="rounded-2xl bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">Aucun cadeau gagné pour le moment. Continue à marquer des points pour débloquer le prochain !</div>'}
+                            ${rewardError ? `<p role="alert" class="text-sm font-bold text-red-600">${escapeHtml(rewardError)}</p>` : ''}
+                        </section>
+                    `;
+                } else {
                     let usersList = [...allUsersData];
                     if (isLogged) {
                         const myIndex = usersList.findIndex(u => u.id === userId);
@@ -1564,16 +2596,19 @@
                 html += `</main>`;
 
                 html += `
-                    <nav class="md:hidden fixed bottom-0 w-full ${isHalloween ? 'bg-slate-900 border-t border-orange-500/30' : 'bg-white border-t border-gray-100'} flex pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20">
-                        <button onclick="changeTab('carte')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'carte' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
+                    <nav class="app-mobile-nav md:hidden fixed bottom-0 left-0 right-0 ${isHalloween ? 'bg-slate-900 border-t border-orange-500/30' : 'bg-white border-t border-gray-100'} flex shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
+                        <button onclick="changeTab('carte')" class="flex-1 flex flex-col items-center justify-center px-1 py-2 gap-1 ${currentTab === 'carte' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
                             <i data-lucide="map" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Carte</span>
                         </button>
-                        ${challengeAvailable ? `<button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'defi_mois' ? (isHalloween ? 'text-orange-400 font-black' : 'text-purple-600') : 'text-gray-400'}">
+                        ${challengeAvailable ? `<button onclick="changeTab('defi_mois')" class="flex-1 flex flex-col items-center justify-center px-1 py-2 gap-1 ${currentTab === 'defi_mois' ? (isHalloween ? 'text-orange-400 font-black' : 'text-purple-600') : 'text-gray-400'}">
                             <i data-lucide="${activeEventInfo.icon}" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">${activeEventInfo.label}</span>
                         </button>` : ''}
-                        <button onclick="changeTab('classement')" class="flex-1 flex flex-col items-center py-3 gap-1 ${currentTab === 'classement' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
+                        <button onclick="changeTab('classement')" class="flex-1 flex flex-col items-center justify-center px-1 py-2 gap-1 ${currentTab === 'classement' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
                             <i data-lucide="medal" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Classement</span>
                         </button>
+                        ${appSettings.monthlyRewardsEnabled && appSettings.monthlyRewards.length ? `<button onclick="changeTab('recompenses')" class="flex-1 flex flex-col items-center justify-center px-1 py-2 gap-1 ${currentTab === 'recompenses' ? (isHalloween ? 'text-orange-400' : 'text-purple-600') : 'text-gray-400'}">
+                            <i data-lucide="gift" class="w-6 h-6"></i><span class="text-[10px] font-bold uppercase tracking-wider">Cadeaux</span>
+                        </button>` : ''}
                     </nav>
                 `;
 
@@ -1588,7 +2623,7 @@
                     const maxScore = pointDefis.reduce((acc, curr) => acc + curr.points, 0);
 
                     html += `
-                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col justify-end md:justify-center md:items-center">
+                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex flex-col justify-end md:justify-center md:items-center">
                             <div class="bg-gray-50 text-gray-800 w-full md:w-[450px] md:rounded-3xl rounded-t-3xl min-h-[60vh] md:min-h-0 flex flex-col overflow-hidden shadow-2xl modal-animate">
                                 <div class="relative h-40 w-full">
                                     ${getAtelierPreview(atelier)}
@@ -1628,6 +2663,34 @@
                     `;
                 }
 
+                if (selectedRewardId) {
+                    const reward = appSettings.monthlyRewards.find(item => item.id === selectedRewardId);
+                    if (reward) {
+                        html += `
+                            <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="monthly-reward-title">
+                                <section class="reward-reveal relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/30 bg-white text-center shadow-2xl">
+                                    <button type="button" onclick="closeMonthlyReward()" aria-label="Fermer le cadeau" class="absolute right-4 top-4 z-10 rounded-full bg-slate-950/70 p-2 text-white transition hover:bg-slate-950">
+                                        <i data-lucide="x" class="h-5 w-5"></i>
+                                    </button>
+                                    <div class="absolute inset-0 bg-gradient-to-br from-violet-600/10 via-transparent to-teal-400/20"></div>
+                                    <div class="relative p-6 sm:p-8">
+                                        <p class="mb-3 text-xs font-black uppercase tracking-[.25em] text-purple-700">Cadeau débloqué · ${reward.points} points</p>
+                                        <div class="mx-auto mb-5 flex aspect-[4/3] max-h-72 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-purple-100 to-teal-100 shadow-inner">
+                                            ${rewardImages[reward.id] ? `<img src="${escapeHtml(rewardImages[reward.id])}" alt="${escapeHtml(reward.title)}" class="h-full w-full object-contain" />` : '<span class="text-8xl" aria-hidden="true">🎁</span>'}
+                                        </div>
+                                        <h2 id="monthly-reward-title" class="text-3xl font-black text-slate-900">${escapeHtml(reward.title)}</h2>
+                                        ${reward.description ? `<p class="mt-3 text-base leading-relaxed text-slate-600">${escapeHtml(reward.description)}</p>` : ''}
+                                        <p class="mt-4 text-xs font-bold uppercase tracking-wider text-emerald-700">À présenter à l’accueil pour récupérer ton cadeau</p>
+                                        <button type="button" onclick="closeMonthlyReward()" class="mt-6 w-full rounded-2xl bg-gradient-to-r from-purple-600 to-teal-500 px-5 py-3 font-black text-white shadow-lg transition hover:brightness-105">Voir mes cadeaux</button>
+                                    </div>
+                                </section>
+                            </div>
+                        `;
+                    } else {
+                        selectedRewardId = null;
+                    }
+                }
+
                 html += `</div>`;
                 app.innerHTML = html;
             }
@@ -1638,13 +2701,34 @@
         // --- CYCLE DE VIE (INIT & ÉCOUTE FIREBASE) ---
         async function initApp() {
             render(); 
+            window.setInterval(() => {
+                if (adminAuthorized && currentTab === 'admin' && adminTab === 'retraits'
+                    && getCurrentRewardDayKey() !== rewardReceptionDayKey) {
+                    syncRewardReceptionListeners();
+                }
+            }, 60000);
             
             onSnapshot(collection(db, "users"), (snapshot) => {
                 allUsersData = [];
+                let currentProfileChanged = false;
                 snapshot.forEach((userDoc) => {
-                    allUsersData.push({ id: userDoc.id, ...userDoc.data() });
+                    const userData = { id: userDoc.id, ...userDoc.data() };
+                    allUsersData.push(userData);
+                    if (userDoc.id === userId) {
+                        if (typeof userData.pseudo === 'string' && userData.pseudo && userData.pseudo !== pseudo) {
+                            pseudo = userData.pseudo;
+                            localStorage.setItem('climbup_pseudo', pseudo);
+                            currentProfileChanged = true;
+                        }
+                        if (Array.isArray(userData.openedRewards)) {
+                            const mergedOpenedRewards = [...new Set([...openedMonthlyRewards, ...userData.openedRewards.filter(item => typeof item === 'string')])];
+                            if (mergedOpenedRewards.length !== openedMonthlyRewards.length) currentProfileChanged = true;
+                            openedMonthlyRewards = mergedOpenedRewards;
+                            localStorage.setItem(openedMonthlyRewardsStorageKey, JSON.stringify(openedMonthlyRewards));
+                        }
+                    }
                 });
-                if (currentTab === 'classement' || currentTab === 'admin') render();
+                if (currentTab === 'classement' || currentTab === 'admin' || currentTab === 'recompenses' || currentProfileChanged) render();
             }, (error) => {
                 console.error("Écoute des profils Firebase échouée :", error);
                 if (currentTab === 'admin') {
@@ -1673,6 +2757,26 @@
                 }
             });
 
+            onSnapshot(collection(db, "rewardImages"), (snapshot) => {
+                const nextImages = {};
+                snapshot.forEach(imageDoc => {
+                    const imageDataUrl = imageDoc.data().imageDataUrl;
+                    if (typeof imageDataUrl === 'string'
+                        && imageDataUrl.length <= 300000
+                        && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl)) {
+                        nextImages[imageDoc.id] = imageDataUrl;
+                    }
+                });
+                rewardImages = nextImages;
+                if (currentTab === 'admin' || (isLogged && appSettings.monthlyRewardsEnabled) || selectedRewardId) render();
+            }, error => {
+                console.error("Lecture des visuels cadeaux échouée :", error);
+                if (currentTab === 'admin') {
+                    adminError = "Les visuels des cadeaux ne sont pas accessibles. Vérifie les règles Firestore.";
+                    render();
+                }
+            });
+
             onSnapshot(doc(db, "appConfig", "main"), (snapshot) => {
                 if (snapshot.exists()) applyAppConfiguration(snapshot.data());
                 if (currentTab !== 'admin' || snapshot.exists()) render();
@@ -1697,6 +2801,7 @@
                         adminError = "Impossible de vérifier les droits administrateur.";
                     }
                 }
+                syncRewardReceptionListeners();
                 if (currentTab === 'admin') render();
             }, error => {
                 console.error("Écoute de la session Firebase échouée :", error);
