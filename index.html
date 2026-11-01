@@ -569,6 +569,9 @@
         }
 
         function getAtelierPreview(atelier) {
+            if (!workshopImagesReady) {
+                return '<div class="absolute inset-0 animate-pulse bg-gray-200" aria-label="Chargement de la miniature"></div>';
+            }
             const imageDataUrl = workshopImages[atelier.id];
             if (typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image/')) {
                 return `<img src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(atelier.name)}" class="absolute inset-0 h-full w-full object-cover" />`;
@@ -671,6 +674,8 @@
         let lastProfileMaintenanceDay = '';
         let lastProfileMaintenanceAttemptAt = 0;
         let workshopImages = {};
+        let workshopImagesReady = false;
+        let workshopImagesLoadTimeout = null;
         let rewardImages = {};
         let appSettings = normalizeAppSettings(DEFAULT_APP_SETTINGS);
         let appConfigError = '';
@@ -3523,7 +3528,16 @@
                 if (currentTab === 'classement') render();
             });
 
-            onSnapshot(collection(db, "workshopImages"), (snapshot) => {
+            workshopImagesLoadTimeout = window.setTimeout(() => {
+                if (workshopImagesReady) return;
+                workshopImagesReady = true;
+                if (currentTab === 'admin') {
+                    adminError = "Le chargement des miniatures prend trop de temps. Les visuels par défaut sont affichés en attendant Firestore.";
+                }
+                render();
+            }, 8000);
+            onSnapshot(collection(db, "workshopImages"), { includeMetadataChanges: true }, (snapshot) => {
+                if (snapshot.metadata.fromCache) return;
                 const nextImages = {};
                 snapshot.forEach(imageDoc => {
                     const imageDataUrl = imageDoc.data().imageDataUrl;
@@ -3534,13 +3548,23 @@
                     }
                 });
                 workshopImages = nextImages;
+                workshopImagesReady = true;
+                if (workshopImagesLoadTimeout !== null) {
+                    window.clearTimeout(workshopImagesLoadTimeout);
+                    workshopImagesLoadTimeout = null;
+                }
                 if (currentTab === 'carte' || currentTab === 'admin' || selectedAtelierId) render();
             }, error => {
                 console.error("Lecture des miniatures d'ateliers échouée :", error);
+                workshopImagesReady = true;
+                if (workshopImagesLoadTimeout !== null) {
+                    window.clearTimeout(workshopImagesLoadTimeout);
+                    workshopImagesLoadTimeout = null;
+                }
                 if (currentTab === 'admin') {
                     adminError = "Les miniatures d'ateliers ne sont pas accessibles. Vérifie les règles Firestore.";
-                    render();
                 }
+                render();
             });
 
             onSnapshot(collection(db, "rewardImages"), (snapshot) => {
