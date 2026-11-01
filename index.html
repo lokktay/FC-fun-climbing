@@ -86,6 +86,24 @@
         }
         .app-mobile-nav button { min-width: 0; }
         .app-mobile-nav span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .admin-category > summary::after {
+            content: "+";
+            flex: 0 0 auto;
+            margin-left: .75rem;
+            color: #7c3aed;
+            font-size: 1.25rem;
+        }
+        .admin-category > summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+        }
+        .admin-category[open] > summary::after { content: "−"; }
+        .admin-category > summary:focus-visible {
+            outline: 3px solid #8b5cf6;
+            outline-offset: 3px;
+        }
         .map-intro-panel {
             position: relative;
             z-index: 10;
@@ -236,7 +254,7 @@
     <script type="module">
         // --- INITIALISATION FIREBASE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, deleteDoc, updateDoc, arrayUnion, runTransaction, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, arrayUnion, runTransaction, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -359,6 +377,10 @@
                 preview: `<div class="absolute inset-0 bg-slate-900 w-full h-full flex flex-col justify-between py-1 px-3"><div class="w-full h-2 bg-red-500 transform -rotate-3"></div><div class="w-full h-2 bg-yellow-400 transform rotate-3"></div><div class="w-full h-2 bg-green-500 transform -rotate-2"></div><div class="w-full h-2 bg-blue-500 transform rotate-2"></div><div class="w-full h-2 bg-teal-400 transform -rotate-3"></div><div class="w-full h-2 bg-purple-600 transform rotate-3"></div><div class="w-full h-2 bg-pink-500 transform -rotate-2"></div></div>`
             }
         ];
+        const DEFAULT_ATELIERS = ATELIERS.map(atelier => ({
+            ...atelier,
+            defis: atelier.defis.map(defi => ({ ...defi }))
+        }));
         const DIFF_GROUPES = {
             'facile': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade'],
             'moyen': ['faceaface', 'zigzag', 'nuages', 'labyrinthe', 'gratteciel', 'echelle', 'tornade', 'bambous', 'fissure', 'tangrams', 'dinosaures', 'rondin'],
@@ -412,9 +434,12 @@
             const raw = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
             const configuredWorkshopIds = Array.isArray(raw.workshopIds)
                 ? raw.workshopIds.filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(id))
-                : ATELIERS.map(atelier => atelier.id);
+                : DEFAULT_ATELIERS.map(atelier => atelier.id);
             const activeWorkshopIds = new Set(configuredWorkshopIds);
-            ATELIERS.splice(0, ATELIERS.length, ...ATELIERS.filter(atelier => activeWorkshopIds.has(atelier.id)));
+            const activeWorkshops = DEFAULT_ATELIERS
+                .filter(atelier => activeWorkshopIds.has(atelier.id))
+                .map(atelier => ({ ...atelier, defis: atelier.defis.map(defi => ({ ...defi })) }));
+            ATELIERS.splice(0, ATELIERS.length, ...activeWorkshops);
             if (raw.workshops && typeof raw.workshops === 'object') {
                 Object.entries(raw.workshops).forEach(([id, workshop]) => {
                     if (!activeWorkshopIds.has(id) || ATELIERS.some(atelier => atelier.id === id)) return;
@@ -553,7 +578,7 @@
 
         // --- GESTION DE L'IDENTITÉ & ÉTATS ---
         let pseudo = localStorage.getItem('climbup_pseudo') || '';
-        let isLogged = !!pseudo;
+        let hasPseudo = !!pseudo;
         
         let userId = localStorage.getItem('climbup_userid');
         if (!userId) {
@@ -561,7 +586,32 @@
             localStorage.setItem('climbup_userid', userId);
         }
 
-        let completedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
+        function loadCompletedDefis() {
+            try {
+                const storedDefis = JSON.parse(localStorage.getItem('climbup_defis') || '{}');
+                if (!storedDefis || typeof storedDefis !== 'object' || Array.isArray(storedDefis)) {
+                    console.warn("Scores enregistrés illisibles : format inattendu.");
+                    return {};
+                }
+                return Object.fromEntries(Object.entries(storedDefis)
+                    .filter(([, timestamp]) => Number.isFinite(timestamp) && timestamp > 0));
+            } catch (error) {
+                console.warn("Scores enregistrés illisibles :", error);
+                return {};
+            }
+        }
+
+        let completedDefis = loadCompletedDefis();
+        const PROFILE_REWARD_ACCESS_MS = 31 * 24 * 60 * 60 * 1000;
+        const profileCreatedAtStorageKey = `climbup_profile_created_at_${userId}`;
+        const savedProfileCreatedAt = Number(localStorage.getItem(profileCreatedAtStorageKey));
+        const earliestLocalScoreAt = Object.values(completedDefis)
+            .filter(timestamp => Number.isFinite(timestamp) && timestamp > 0)
+            .reduce((earliest, timestamp) => Math.min(earliest, timestamp), Infinity);
+        let profileCreatedAt = Number.isFinite(savedProfileCreatedAt) && savedProfileCreatedAt > 0
+            ? savedProfileCreatedAt
+            : Number.isFinite(earliestLocalScoreAt) ? earliestLocalScoreAt : Date.now();
+        localStorage.setItem(profileCreatedAtStorageKey, String(profileCreatedAt));
         const openedMonthlyRewardsStorageKey = `climbup_opened_monthly_rewards_${userId}`;
         let openedMonthlyRewards = [];
         try {
@@ -613,6 +663,12 @@
         let leaderboardTab = 'jour';
         let selectedAtelierId = null;
         let allUsersData = [];
+        let allTimeLeaderboard = [];
+        let allTimeLeaderboardError = '';
+        let usersSnapshotReady = false;
+        let profileMaintenanceInProgress = false;
+        let lastProfileMaintenanceDay = '';
+        let lastProfileMaintenanceAttemptAt = 0;
         let workshopImages = {};
         let rewardImages = {};
         let appSettings = normalizeAppSettings(DEFAULT_APP_SETTINGS);
@@ -622,6 +678,13 @@
         let adminError = '';
         let adminMessage = '';
         let adminTab = 'gestion';
+        let adminCategoryOpen = { analytics: true };
+        let adminAnalyticsPeriod = 'month';
+        let adminAnalyticsFrom = '';
+        let adminAnalyticsTo = '';
+        let adminObservations = [];
+        let adminObservationsError = '';
+        let adminObservationsUnsubscribe = null;
         let rewardError = '';
         const openingMonthlyRewards = new Set();
         const claimingMonthlyRewards = new Set();
@@ -713,6 +776,8 @@
             currentTab = 'admin';
             adminError = '';
             adminMessage = '';
+            syncRewardReceptionListeners();
+            syncAdminObservationsListener();
             render();
         };
         window.openAdminGate = function() {
@@ -749,7 +814,7 @@
         window.adminLogout = async function() {
             try {
                 await signOut(auth);
-                currentTab = isLogged ? 'carte' : 'admin';
+                currentTab = hasPseudo ? 'carte' : 'admin';
                 adminMessage = '';
                 adminError = '';
             } catch (error) {
@@ -1188,6 +1253,120 @@
             const now = new Date();
             return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         }
+        function formatLocalDateInput(date) {
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+        function getDefaultAnalyticsRange(period, now = new Date()) {
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const start = new Date(end);
+            if (period === 'day') start.setDate(start.getDate() - 29);
+            else if (period === 'week') {
+                const daysSinceMonday = (start.getDay() + 6) % 7;
+                start.setDate(start.getDate() - daysSinceMonday - 77);
+            } else if (period === 'month') start.setMonth(start.getMonth() - 11, 1);
+            else start.setFullYear(start.getFullYear() - 4, 0, 1);
+            return { from: formatLocalDateInput(start), to: formatLocalDateInput(end) };
+        }
+        function parseLocalDateInput(value) {
+            const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+            if (!match) return null;
+            const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+            return date.getFullYear() === Number(match[1])
+                && date.getMonth() === Number(match[2]) - 1
+                && date.getDate() === Number(match[3])
+                ? date : null;
+        }
+        function getAnalyticsBucket(date, period) {
+            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            if (period === 'week') start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+            else if (period === 'month') start.setDate(1);
+            else if (period === 'year') start.setMonth(0, 1);
+            const key = period === 'year'
+                ? String(start.getFullYear())
+                : period === 'month'
+                    ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`
+                    : formatLocalDateInput(start);
+            const label = period === 'year'
+                ? String(start.getFullYear())
+                : period === 'month'
+                    ? start.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                    : period === 'week'
+                        ? `Semaine du ${start.toLocaleDateString('fr-FR')}`
+                        : start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+            return { key, label, start };
+        }
+        function countAnalyticsBuckets(fromDate, toDate, period, limit = 366) {
+            const lastBucket = getAnalyticsBucket(toDate, period).start;
+            let current = getAnalyticsBucket(fromDate, period).start;
+            let count = 0;
+            while (current <= lastBucket && count <= limit) {
+                count += 1;
+                if (period === 'day') current.setDate(current.getDate() + 1);
+                else if (period === 'week') current.setDate(current.getDate() + 7);
+                else if (period === 'month') current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+                else current = new Date(current.getFullYear() + 1, 0, 1);
+            }
+            return count;
+        }
+        function getAdminAnalytics(users, period, fromDate, toDate) {
+            const start = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime();
+            const end = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate() + 1).getTime();
+            const buckets = new Map();
+            const activePlayers = new Set();
+            let validations = 0;
+            let points = 0;
+
+            let currentBucket = getAnalyticsBucket(fromDate, period).start;
+            const lastBucket = getAnalyticsBucket(toDate, period).start;
+            while (currentBucket <= lastBucket) {
+                const bucket = getAnalyticsBucket(currentBucket, period);
+                buckets.set(bucket.key, {
+                    ...bucket,
+                    validations: 0,
+                    points: 0,
+                    players: new Set()
+                });
+                if (period === 'day') currentBucket.setDate(currentBucket.getDate() + 1);
+                else if (period === 'week') currentBucket.setDate(currentBucket.getDate() + 7);
+                else if (period === 'month') currentBucket = new Date(currentBucket.getFullYear(), currentBucket.getMonth() + 1, 1);
+                else currentBucket = new Date(currentBucket.getFullYear() + 1, 0, 1);
+            }
+
+            users.forEach(user => {
+                ATELIERS.forEach(atelier => atelier.defis.forEach(defi => {
+                    const timestamp = Number((user.completedDefis || {})[defi.id]);
+                    if (!Number.isFinite(timestamp) || timestamp < start || timestamp >= end) return;
+                    const date = new Date(timestamp);
+                    if (Number.isNaN(date.getTime())) return;
+                    const bucket = getAnalyticsBucket(date, period);
+                    if (!buckets.has(bucket.key)) {
+                        buckets.set(bucket.key, {
+                            ...bucket,
+                            validations: 0,
+                            points: 0,
+                            players: new Set()
+                        });
+                    }
+                    const row = buckets.get(bucket.key);
+                    const earnedPoints = defi.rewardType === 'gift' ? 0 : defi.points;
+                    row.validations += 1;
+                    row.points += earnedPoints;
+                    row.players.add(user.id);
+                    validations += 1;
+                    points += earnedPoints;
+                    activePlayers.add(user.id);
+                }));
+            });
+
+            return {
+                points,
+                validations,
+                activePlayers: activePlayers.size,
+                buckets: [...buckets.values()]
+                    .sort((first, second) => first.start - second.start)
+                    .map(row => ({ ...row, players: row.players.size }))
+            };
+        }
         function getMonthlyRewardClaimKey(rewardId, monthKey = getCurrentRewardMonthKey()) {
             return `${monthKey}_${rewardId}`;
         }
@@ -1201,8 +1380,8 @@
 
             ATELIERS.forEach(atelier => {
                 atelier.defis.forEach(defi => {
-                    const timestamp = defis[defi.id];
-                    if (timestamp) {
+                    const timestamp = Number(defis[defi.id]);
+                    if (Number.isFinite(timestamp) && timestamp > 0) {
                         const points = defi.rewardType === 'gift' ? 0 : defi.points;
                         total += points;
                         if (timestamp >= startOfDay) daily += points;
@@ -1212,6 +1391,70 @@
                 });
             });
             return { total, daily, weekly, monthly };
+        }
+
+        function normalizeAllTimeLeaderboardEntries(entries) {
+            if (!Array.isArray(entries)) return [];
+            return entries
+                .filter(entry => entry
+                    && typeof entry.userId === 'string'
+                    && entry.userId.length <= 128
+                    && typeof entry.pseudo === 'string'
+                    && entry.pseudo.length <= 100
+                    && Number.isFinite(Number(entry.score))
+                    && Number(entry.score) > 0)
+                .map(entry => ({
+                    userId: entry.userId,
+                    pseudo: entry.pseudo,
+                    score: Number(entry.score)
+                }))
+                .sort((first, second) => second.score - first.score
+                    || first.userId.localeCompare(second.userId))
+                .slice(0, 5);
+        }
+
+        async function updateAllTimeLeaderboard(users) {
+            const candidates = users.map(user => ({
+                userId: user.id,
+                pseudo: typeof user.pseudo === 'string' && user.pseudo
+                    ? user.pseudo.slice(0, 100)
+                    : 'Anonyme',
+                score: calculateUserScores(user.completedDefis || {}).total
+            })).filter(entry => entry.score > 0);
+            if (!candidates.length) return true;
+
+            const leaderboardRef = doc(db, "leaderboards", "allTime");
+            try {
+                await runTransaction(db, async transaction => {
+                    const snapshot = await transaction.get(leaderboardRef);
+                    const existingEntries = normalizeAllTimeLeaderboardEntries(
+                        snapshot.exists() ? snapshot.data().entries : []
+                    );
+                    const entriesByUser = new Map();
+                    existingEntries.forEach(entry => entriesByUser.set(entry.userId, entry));
+                    candidates.forEach(candidate => {
+                        const previous = entriesByUser.get(candidate.userId);
+                        entriesByUser.set(candidate.userId, {
+                            userId: candidate.userId,
+                            pseudo: candidate.pseudo,
+                            score: Math.max(previous ? previous.score : 0, candidate.score)
+                        });
+                    });
+                    const entries = [...entriesByUser.values()]
+                        .sort((first, second) => second.score - first.score
+                            || first.userId.localeCompare(second.userId))
+                        .slice(0, 5);
+                    if (JSON.stringify(entries) === JSON.stringify(existingEntries)) return;
+                    transaction.set(leaderboardRef, { entries });
+                });
+                allTimeLeaderboardError = '';
+                return true;
+            } catch (error) {
+                console.error("Mise à jour du classement historique impossible :", error);
+                allTimeLeaderboardError = "Le classement historique n'a pas pu être enregistré. Vérifie les règles Firestore.";
+                if (currentTab === 'classement') render();
+                return false;
+            }
         }
 
         function calculateMonthlyScoreForKey(defis, monthKey) {
@@ -1243,6 +1486,190 @@
                 second.monthKey.localeCompare(first.monthKey)
                 || Number(first.reward.points) - Number(second.reward.points)
             );
+        }
+
+        function getProfileCreatedAtTimestamp(profile) {
+            const storedCreatedAt = Number(profile.createdAt);
+            if (Number.isFinite(storedCreatedAt) && storedCreatedAt > 0) return storedCreatedAt;
+            const scoreTimestamps = Object.values(profile.completedDefis || {})
+                .map(Number)
+                .filter(timestamp => Number.isFinite(timestamp) && timestamp > 0);
+            if (scoreTimestamps.length) return Math.min(...scoreTimestamps);
+            const lastUpdated = Number(profile.lastUpdated);
+            return Number.isFinite(lastUpdated) && lastUpdated > 0 ? lastUpdated : Date.now();
+        }
+
+        function getUserRetentionReason(profile, playerId, leaderboardEntries = allTimeLeaderboard) {
+            const scores = calculateUserScores(profile.completedDefis || {});
+            if (scores.daily > 0) return "score présent dans le classement du jour";
+            if (scores.weekly > 0) return "score présent dans le classement de la semaine";
+            if (scores.monthly > 0) return "score présent dans le classement du mois";
+            if (leaderboardEntries.some(entry => entry.userId === playerId)) {
+                return "record présent dans le top 5 permanent";
+            }
+            const createdAt = getProfileCreatedAtTimestamp(profile);
+            const rewardAccessEndsAt = createdAt + PROFILE_REWARD_ACCESS_MS;
+            if (Date.now() < rewardAccessEndsAt) {
+                return `accès aux cadeaux jusqu'au ${new Date(rewardAccessEndsAt).toLocaleDateString('fr-FR')}`;
+            }
+            return '';
+        }
+
+        function hasRewardAccess(createdAt = profileCreatedAt) {
+            return Date.now() < Number(createdAt) + PROFILE_REWARD_ACCESS_MS;
+        }
+
+        async function savePlayerProfile(profileData) {
+            const profileRef = doc(db, "users", userId);
+            return runTransaction(db, async transaction => {
+                const profileSnapshot = await transaction.get(profileRef);
+                const existingProfile = profileSnapshot.exists() ? profileSnapshot.data() : {};
+                const createdAt = Number(existingProfile.createdAt) > 0
+                    ? Number(existingProfile.createdAt)
+                    : profileCreatedAt;
+                transaction.set(profileRef, {
+                    ...profileData,
+                    createdAt,
+                    lastUpdated: Date.now()
+                }, { merge: true });
+                return createdAt;
+            });
+        }
+
+        async function deleteExpiredUserProfile(playerId) {
+            if (!adminAuthorized || !playerId) throw new Error("Accès administrateur requis.");
+            const profileRef = doc(db, "users", playerId);
+            const leaderboardRef = doc(db, "leaderboards", "allTime");
+            return runTransaction(db, async transaction => {
+                const profileSnapshot = await transaction.get(profileRef);
+                const leaderboardSnapshot = await transaction.get(leaderboardRef);
+                if (!profileSnapshot.exists()) return { deleted: false, retentionReason: '' };
+                const profile = profileSnapshot.data();
+                const createdAt = getProfileCreatedAtTimestamp(profile);
+                const profileWithCreatedAt = { ...profile, createdAt };
+                const leaderboardEntries = normalizeAllTimeLeaderboardEntries(
+                    leaderboardSnapshot.exists() ? leaderboardSnapshot.data().entries : []
+                );
+                const retentionReason = getUserRetentionReason(profileWithCreatedAt, playerId, leaderboardEntries);
+                if (retentionReason) {
+                    if (profile.createdAt !== createdAt) transaction.update(profileRef, { createdAt });
+                    return { deleted: false, retentionReason };
+                }
+                transaction.delete(profileRef);
+                return { deleted: true, retentionReason: '' };
+            });
+        }
+
+        async function removeExpiredArchivedProfiles() {
+            const snapshot = await getDocs(collection(db, "archivedUsers"));
+            const leaderboardRef = doc(db, "leaderboards", "allTime");
+            let deletedCount = 0;
+            let restoredCount = 0;
+            let failedCount = 0;
+            const archives = snapshot.docs;
+            for (let index = 0; index < archives.length; index += 5) {
+                const batch = archives.slice(index, index + 5);
+                const results = await Promise.all(batch.map(async archiveDocument => {
+                    try {
+                        return await runTransaction(db, async transaction => {
+                            const archiveRef = doc(db, "archivedUsers", archiveDocument.id);
+                            const profileRef = doc(db, "users", archiveDocument.id);
+                            const archiveSnapshot = await transaction.get(archiveRef);
+                            const profileSnapshot = await transaction.get(profileRef);
+                            const leaderboardSnapshot = await transaction.get(leaderboardRef);
+                            if (!archiveSnapshot.exists()) return 'unchanged';
+                            if (profileSnapshot.exists()) {
+                                transaction.delete(archiveRef);
+                                return 'deleted';
+                            }
+
+                            const archivedProfile = archiveSnapshot.data();
+                            const createdAt = getProfileCreatedAtTimestamp(archivedProfile);
+                            const leaderboardEntries = normalizeAllTimeLeaderboardEntries(
+                                leaderboardSnapshot.exists() ? leaderboardSnapshot.data().entries : []
+                            );
+                            const shouldKeep = !!getUserRetentionReason(
+                                { ...archivedProfile, createdAt },
+                                archiveDocument.id,
+                                leaderboardEntries
+                            );
+                            if (shouldKeep) {
+                                delete archivedProfile.archivedAt;
+                                delete archivedProfile.archiveReason;
+                                archivedProfile.createdAt = createdAt;
+                                transaction.set(profileRef, archivedProfile);
+                            }
+                            transaction.delete(archiveRef);
+                            return shouldKeep ? 'restored' : 'deleted';
+                        });
+                    } catch (error) {
+                        failedCount += 1;
+                        console.error(`Nettoyage de l'ancienne archive ${archiveDocument.id} impossible :`, error);
+                        return 'failed';
+                    }
+                }));
+                deletedCount += results.filter(result => result === 'deleted').length;
+                restoredCount += results.filter(result => result === 'restored').length;
+            }
+            return { deletedCount, restoredCount, failedCount };
+        }
+
+        async function removeExpiredProfiles(users = allUsersData) {
+            const today = getCurrentRewardDayKey();
+            if (!adminAuthorized || !usersSnapshotReady || profileMaintenanceInProgress
+                || lastProfileMaintenanceDay === today
+                || Date.now() - lastProfileMaintenanceAttemptAt < 5 * 60 * 1000) return;
+            profileMaintenanceInProgress = true;
+            lastProfileMaintenanceAttemptAt = Date.now();
+            let deletedCount = 0;
+            let restoredCount = 0;
+            let failedCount = 0;
+            try {
+                const candidates = users.filter(user =>
+                    !Number.isFinite(Number(user.createdAt))
+                    || !getUserRetentionReason(user, user.id, allTimeLeaderboard)
+                );
+                for (let index = 0; index < candidates.length; index += 5) {
+                    const batch = candidates.slice(index, index + 5);
+                    const results = await Promise.all(batch.map(async user => {
+                        try {
+                            return await deleteExpiredUserProfile(user.id);
+                        } catch (error) {
+                            failedCount += 1;
+                            console.error(`Suppression du profil ${user.id} impossible :`, error);
+                            return { deleted: false, retentionReason: '' };
+                        }
+                    }));
+                    deletedCount += results.filter(result => result.deleted).length;
+                }
+                try {
+                    const archiveCleanup = await removeExpiredArchivedProfiles();
+                    deletedCount += archiveCleanup.deletedCount;
+                    restoredCount += archiveCleanup.restoredCount;
+                    failedCount += archiveCleanup.failedCount;
+                } catch (error) {
+                    failedCount += 1;
+                    console.error("Nettoyage des anciennes archives impossible :", error);
+                }
+                if (!failedCount) lastProfileMaintenanceDay = today;
+                if (deletedCount || restoredCount) {
+                    adminError = '';
+                    adminMessage = `${deletedCount} profil(s) supprimé(s) définitivement après 31 jours ; ${restoredCount} ancienne(s) archive(s) encore dans le délai cadeau ont été remises dans les profils actifs.`;
+                }
+                if (failedCount) {
+                    adminError = `${failedCount} profil(s) n'ont pas pu être traités. Vérifie la connexion et les règles Firestore, puis réessaie.`;
+                    adminMessage = '';
+                }
+            } finally {
+                profileMaintenanceInProgress = false;
+            }
+            if (currentTab === 'admin' && adminTab === 'gestion' && (deletedCount || failedCount)) render();
+        }
+
+        async function synchronizeAndRemoveExpiredProfiles() {
+            if (!adminAuthorized || !usersSnapshotReady) return;
+            const leaderboardSynchronized = await updateAllTimeLeaderboard(allUsersData);
+            if (leaderboardSynchronized) await removeExpiredProfiles(allUsersData);
         }
 
         function getActiveRewardReceptionEntries() {
@@ -1318,22 +1745,47 @@
             );
         }
 
+        function syncAdminObservationsListener() {
+            if (!adminAuthorized || currentTab !== 'admin' || adminTab !== 'gestion') {
+                if (adminObservationsUnsubscribe) adminObservationsUnsubscribe();
+                adminObservationsUnsubscribe = null;
+                return;
+            }
+            if (!adminObservationsUnsubscribe) {
+                adminObservationsError = '';
+                adminObservationsUnsubscribe = onSnapshot(collection(db, "adminObservations"), snapshot => {
+                    adminObservations = snapshot.docs
+                        .map(observationDoc => ({ id: observationDoc.id, ...observationDoc.data() }))
+                        .filter(observation => Number.isFinite(Number(observation.occurredAt))
+                            && typeof observation.text === 'string')
+                        .sort((first, second) => Number(second.occurredAt) - Number(first.occurredAt));
+                    if (currentTab === 'admin' && adminTab === 'gestion') render();
+                }, error => {
+                    console.error("Lecture des observations de salle impossible :", error);
+                    adminObservationsError = "Les observations de salle ne sont pas accessibles. Vérifie les règles Firestore admin.";
+                    if (currentTab === 'admin' && adminTab === 'gestion') render();
+                });
+            }
+        }
+
         // --- ACTIONS EXPORTÉES DANS WINDOW POUR HTML ---
-        window.handleLogin = function(e) {
+        window.handlePseudoSubmit = function(e) {
             e.preventDefault();
             const input = document.getElementById('pseudoInput');
             if (input.value.trim()) {
                 pseudo = input.value.trim();
                 localStorage.setItem('climbup_pseudo', pseudo);
-                isLogged = true;
+                hasPseudo = true;
                 
-                try {
-                    setDoc(doc(db, "users", userId), {
-                        pseudo: pseudo,
-                        completedDefis: completedDefis,
-                        lastUpdated: Date.now()
-                    }, { merge: true }).catch(err => console.warn("Erreur Firebase :", err));
-                } catch(e) {}
+                savePlayerProfile({
+                    pseudo: pseudo,
+                    completedDefis: completedDefis
+                })
+                    .then(() => updateAllTimeLeaderboard([
+                        ...allUsersData.filter(user => user.id !== userId),
+                        { id: userId, pseudo, completedDefis }
+                    ]))
+                    .catch(error => console.error("Enregistrement du profil Firebase impossible :", error));
 
                 render();
             }
@@ -1349,14 +1801,15 @@
             localStorage.setItem('climbup_defis', JSON.stringify(completedDefis));
             render();
             
-            try {
-                // AJOUT DU PSEUDO ICI pour garantir qu'il ne soit jamais "undefined" dans la base
-                setDoc(doc(db, "users", userId), {
-                    pseudo: pseudo, 
-                    completedDefis: completedDefis,
-                    lastUpdated: Date.now()
-                }, { merge: true }).catch(err => console.warn("Erreur Firebase :", err));
-            } catch(e) {}
+            savePlayerProfile({
+                pseudo: pseudo,
+                completedDefis: completedDefis
+            })
+                .then(() => updateAllTimeLeaderboard([
+                    ...allUsersData.filter(user => user.id !== userId),
+                    { id: userId, pseudo, completedDefis }
+                ]))
+                .catch(error => console.error("Enregistrement du score Firebase impossible :", error));
         };
 
         window.openModal = id => { selectedAtelierId = id; render(); };
@@ -1370,10 +1823,95 @@
         window.changeAdminTab = tab => {
             if (!['gestion', 'retraits'].includes(tab)) return;
             adminTab = tab;
-            if (tab === 'retraits') syncRewardReceptionListeners();
+            syncRewardReceptionListeners();
+            syncAdminObservationsListener();
             render();
         };
-        window.changeLeaderboardTab = tab => { leaderboardTab = tab; render(); };
+        window.setAdminCategoryOpen = (category, isOpen) => {
+            if (['analytics', 'settings', 'rewardStats', 'rewards', 'players', 'workshops', 'events', 'challengeStats'].includes(category)) {
+                adminCategoryOpen[category] = isOpen;
+            }
+        };
+        window.changeAdminAnalyticsPeriod = period => {
+            if (!['day', 'week', 'month', 'year'].includes(period)) return;
+            adminAnalyticsPeriod = period;
+            const range = getDefaultAnalyticsRange(period);
+            adminAnalyticsFrom = range.from;
+            adminAnalyticsTo = range.to;
+            render();
+        };
+        window.applyAdminAnalyticsFilter = function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const period = String(formData.get('period'));
+            const from = String(formData.get('from'));
+            const to = String(formData.get('to'));
+            const startDate = parseLocalDateInput(from);
+            const endDate = parseLocalDateInput(to);
+            if (!['day', 'week', 'month', 'year'].includes(period) || !startDate || !endDate || startDate > endDate) {
+                adminError = "Choisis une période et deux dates valides, avec une date de début antérieure à la date de fin.";
+                render();
+                return;
+            }
+            if (countAnalyticsBuckets(startDate, endDate, period) > 366) {
+                adminError = "La période sélectionnée dépasse 366 unités d'affichage. Réduis la plage de dates pour garder un tableau lisible.";
+                render();
+                return;
+            }
+            adminAnalyticsPeriod = period;
+            adminAnalyticsFrom = from;
+            adminAnalyticsTo = to;
+            adminError = '';
+            render();
+        };
+        window.saveAdminObservation = async function(event) {
+            event.preventDefault();
+            if (!adminAuthorized || !adminUser) return;
+            const formData = new FormData(event.currentTarget);
+            const date = parseLocalDateInput(String(formData.get('date')));
+            const text = String(formData.get('text') || '').trim();
+            if (!date || !text || text.length > 500) {
+                adminError = "Ajoute une date valide et une observation de 1 à 500 caractères.";
+                render();
+                return;
+            }
+            const occurredAt = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12).getTime();
+            const observationId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            try {
+                await setDoc(doc(db, "adminObservations", observationId), {
+                    occurredAt,
+                    text,
+                    createdAt: Date.now()
+                });
+                adminError = '';
+                adminMessage = "L'observation a été enregistrée.";
+            } catch (error) {
+                console.error("Enregistrement de l'observation de salle impossible :", error);
+                adminError = "L'observation n'a pas pu être enregistrée. Vérifie ta connexion et les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+        window.deleteAdminObservation = async function(button) {
+            if (!adminAuthorized) return;
+            const observationId = button.dataset.observationId;
+            if (!observationId || !window.confirm("Supprimer cette observation de salle ?")) return;
+            try {
+                await deleteDoc(doc(db, "adminObservations", observationId));
+                adminError = '';
+                adminMessage = "L'observation a été supprimée.";
+            } catch (error) {
+                console.error("Suppression de l'observation de salle impossible :", error);
+                adminError = "L'observation n'a pas pu être supprimée. Vérifie les règles Firestore admin.";
+                adminMessage = '';
+            }
+            render();
+        };
+        window.changeLeaderboardTab = tab => {
+            if (!['jour', 'semaine', 'mois', 'allTime'].includes(tab)) return;
+            leaderboardTab = tab;
+            render();
+        };
 
         window.selectHalloweenLevel = lvl => {
             const event = getCurrentEvent();
@@ -1612,15 +2150,26 @@
             const playerId = row && row.dataset.playerId;
             const player = allUsersData.find(item => item.id === playerId);
             if (!playerId || !player) return;
-            if (!window.confirm(`Supprimer le profil « ${player.pseudo || 'Anonyme'} » et ses points du classement partagé ? S'il revient sur le même appareil, sa progression locale pourra recréer son profil.`)) return;
+            const retentionReason = getUserRetentionReason(player, playerId);
+            if (retentionReason) {
+                adminMessage = `Le profil « ${player.pseudo || 'Anonyme'} » est conservé : ${retentionReason}.`;
+                adminError = '';
+                render();
+                return;
+            }
+            if (!window.confirm(`Supprimer définitivement le profil « ${player.pseudo || 'Anonyme'} » ? Il ne figure dans aucun classement et son délai cadeau de 31 jours est terminé. Cette suppression est irréversible.`)) return;
             try {
-                await deleteDoc(doc(db, "users", playerId));
-                allUsersData = allUsersData.filter(item => item.id !== playerId);
-                adminMessage = "Le profil et ses points ont été supprimés du classement partagé.";
+                const result = await deleteExpiredUserProfile(playerId);
+                if (!result.deleted) {
+                    adminMessage = `Le profil est conservé : ${result.retentionReason || "il n'est plus actif."}`;
+                } else {
+                    allUsersData = allUsersData.filter(item => item.id !== playerId);
+                    adminMessage = "Le profil et ses données ont été supprimés définitivement.";
+                }
                 adminError = '';
             } catch (error) {
                 console.error("Suppression du profil impossible :", error);
-                adminError = "Suppression impossible. Vérifie les règles Firestore admin.";
+                adminError = "Suppression impossible. Vérifie les règles Firestore admin et réessaie.";
                 adminMessage = '';
             }
             render();
@@ -1633,6 +2182,11 @@
                 .some(entry => entry.claimKey === claimKey);
             if (!reward || !appSettings.monthlyRewardsEnabled || !isEarned || openedMonthlyRewards.includes(claimKey)
                 || openingMonthlyRewards.has(claimKey)) return;
+            if (!hasRewardAccess()) {
+                rewardError = "Le délai d'accès aux cadeaux est terminé (31 jours après la création du profil).";
+                render();
+                return;
+            }
             openingMonthlyRewards.add(claimKey);
             rewardError = '';
             try {
@@ -1640,12 +2194,19 @@
                     const profileRef = doc(db, "users", userId);
                     const profileSnapshot = await transaction.get(profileRef);
                     const profile = profileSnapshot.exists() ? profileSnapshot.data() : {};
+                    const createdAt = Number(profile.createdAt) > 0
+                        ? Number(profile.createdAt)
+                        : profileCreatedAt;
+                    if (!hasRewardAccess(createdAt)) {
+                        throw new Error("Le délai d'accès aux cadeaux est terminé (31 jours après la création du profil).");
+                    }
                     if (Array.isArray(profile.openedRewards) && profile.openedRewards.includes(claimKey)) {
                         throw new Error("Ce cadeau a déjà été ouvert sur un autre appareil.");
                     }
                     transaction.set(profileRef, {
                         pseudo,
                         completedDefis,
+                        createdAt,
                         openedRewards: arrayUnion(claimKey),
                         lastUpdated: Date.now()
                     }, { merge: true });
@@ -1658,6 +2219,8 @@
                 if (error.message === "Ce cadeau a déjà été ouvert sur un autre appareil.") {
                     openedMonthlyRewards = [...new Set([...openedMonthlyRewards, claimKey])];
                     localStorage.setItem(openedMonthlyRewardsStorageKey, JSON.stringify(openedMonthlyRewards));
+                    rewardError = error.message;
+                } else if (error.message === "Le délai d'accès aux cadeaux est terminé (31 jours après la création du profil).") {
                     rewardError = error.message;
                 } else {
                     rewardError = "Le cadeau n'a pas pu être ouvert. Vérifie ta connexion et réessaie.";
@@ -1877,6 +2440,27 @@
                 `;
             }
 
+            if (!['day', 'week', 'month', 'year'].includes(adminAnalyticsPeriod)) adminAnalyticsPeriod = 'month';
+            if (!adminAnalyticsFrom || !adminAnalyticsTo) {
+                const defaultRange = getDefaultAnalyticsRange(adminAnalyticsPeriod);
+                adminAnalyticsFrom = defaultRange.from;
+                adminAnalyticsTo = defaultRange.to;
+            }
+            let analyticsFromDate = parseLocalDateInput(adminAnalyticsFrom);
+            let analyticsToDate = parseLocalDateInput(adminAnalyticsTo);
+            if (!analyticsFromDate || !analyticsToDate || analyticsFromDate > analyticsToDate) {
+                const defaultRange = getDefaultAnalyticsRange(adminAnalyticsPeriod);
+                adminAnalyticsFrom = defaultRange.from;
+                adminAnalyticsTo = defaultRange.to;
+                analyticsFromDate = parseLocalDateInput(adminAnalyticsFrom);
+                analyticsToDate = parseLocalDateInput(adminAnalyticsTo);
+            }
+            const analyticsData = getAdminAnalytics(
+                allUsersData,
+                adminAnalyticsPeriod,
+                parseLocalDateInput(adminAnalyticsFrom),
+                parseLocalDateInput(adminAnalyticsTo)
+            );
             const participantCount = allUsersData.length;
             const scores = allUsersData.map(user => calculateUserScores(user.completedDefis || {}).total);
             const averageScore = scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
@@ -1919,6 +2503,35 @@
                     </div>
                 `;
             })).join('');
+            const maxAnalyticsPoints = Math.max(1, ...analyticsData.buckets.map(bucket => bucket.points));
+            const analyticsRows = analyticsData.buckets.slice().reverse().map(bucket => `
+                <tr class="border-t border-gray-100">
+                    <th scope="row" class="whitespace-nowrap px-3 py-3 text-left font-bold text-gray-800">${escapeHtml(bucket.label)}</th>
+                    <td class="px-3 py-3 text-right font-bold text-purple-700">${bucket.points} pts</td>
+                    <td class="px-3 py-3 text-right text-gray-700">${bucket.validations}</td>
+                    <td class="px-3 py-3 text-right text-gray-700">${bucket.players}</td>
+                    <td class="min-w-24 px-3 py-3">
+                        <div role="progressbar" aria-label="${escapeHtml(bucket.label)} · ${bucket.points} points" aria-valuemin="0" aria-valuemax="${maxAnalyticsPoints}" aria-valuenow="${bucket.points}" class="h-2 overflow-hidden rounded-full bg-purple-100">
+                            <div class="h-full rounded-full bg-purple-500" style="width:${Math.round(bucket.points / maxAnalyticsPoints * 100)}%"></div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            const analyticsPeriodLabels = {
+                day: 'par jour',
+                week: 'par semaine',
+                month: 'par mois',
+                year: 'par année'
+            };
+            const analyticsObservationRows = adminObservations.slice(0, 30).map(observation => `
+                <article class="flex flex-col gap-2 rounded-xl border border-amber-100 bg-amber-50/60 p-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0">
+                        <p class="text-xs font-black uppercase tracking-wide text-amber-800">${new Date(Number(observation.occurredAt)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        <p class="mt-1 whitespace-pre-wrap break-words text-sm text-gray-700">${escapeHtml(observation.text)}</p>
+                    </div>
+                    <button type="button" data-observation-id="${escapeHtml(observation.id)}" onclick="deleteAdminObservation(this)" class="self-start rounded-lg px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">Supprimer</button>
+                </article>
+            `).join('');
             const currentMonthlyRewards = appSettings.monthlyRewards
                 .slice()
                 .sort((first, second) => Number(first.points) - Number(second.points));
@@ -2017,12 +2630,78 @@
                     ${appConfigError ? `<div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-800">${escapeHtml(appConfigError)}</div>` : ''}
                     ${adminSectionNav}
 
+                    <details data-admin-category="analytics" ontoggle="setAdminCategoryOpen('analytics', this.open)" ${adminCategoryOpen.analytics ? 'open' : ''} class="admin-category rounded-2xl border border-purple-100 bg-white shadow-sm">
+                        <summary class="cursor-pointer list-none rounded-2xl px-5 py-4 font-black text-gray-900 marker:hidden">
+                            <span class="flex items-center justify-between gap-3"><span>📊 Données et évolution</span><span class="text-sm font-bold text-purple-600">${analyticsData.validations} validation(s) sur la période</span></span>
+                        </summary>
+                        <div class="space-y-5 border-t border-gray-100 p-5">
                     <div class="grid gap-4 sm:grid-cols-3">
                         <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Profils participants</p><p class="mt-2 text-3xl font-black">${participantCount}</p></article>
                         <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Score moyen</p><p class="mt-2 text-3xl font-black">${averageScore} pts</p></article>
                         <article class="rounded-2xl bg-white p-5 shadow-sm"><p class="text-sm font-bold text-gray-500">Défis validés / possibilités</p><p class="mt-2 text-3xl font-black">${completionRate}%</p></article>
                     </div>
                     <p class="text-xs text-gray-500">Les statistiques comptent les profils enregistrés dans Firestore ; un même joueur peut avoir plusieurs profils sur différents appareils.</p>
+                    <section class="space-y-4 rounded-xl border border-gray-100 p-4" aria-label="Évolution des scores">
+                        <div>
+                            <h2 class="text-lg font-black">Évolution des validations</h2>
+                            <p class="mt-1 text-sm text-gray-500">Choisis un pas de temps et une période pour comparer les points et l'activité de la salle.</p>
+                        </div>
+                        <form onsubmit="applyAdminAnalyticsFilter(event)" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+                            <label class="text-sm font-bold text-gray-600">Afficher
+                                <select name="period" onchange="changeAdminAnalyticsPeriod(this.value)" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+                                    <option value="day" ${adminAnalyticsPeriod === 'day' ? 'selected' : ''}>Par jour</option>
+                                    <option value="week" ${adminAnalyticsPeriod === 'week' ? 'selected' : ''}>Par semaine</option>
+                                    <option value="month" ${adminAnalyticsPeriod === 'month' ? 'selected' : ''}>Par mois</option>
+                                    <option value="year" ${adminAnalyticsPeriod === 'year' ? 'selected' : ''}>Par année</option>
+                                </select>
+                            </label>
+                            <label class="text-sm font-bold text-gray-600">Du
+                                <input name="from" type="date" required value="${escapeHtml(adminAnalyticsFrom)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2" />
+                            </label>
+                            <label class="text-sm font-bold text-gray-600">Au
+                                <input name="to" type="date" required value="${escapeHtml(adminAnalyticsTo)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2" />
+                            </label>
+                            <button type="submit" class="rounded-lg bg-purple-600 px-4 py-2 font-black text-white hover:bg-purple-700">Actualiser</button>
+                        </form>
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <p class="rounded-lg bg-gray-50 p-3 text-sm"><span class="block text-xs font-bold uppercase text-gray-500">Points cumulés</span><strong class="mt-1 block text-xl">${analyticsData.points} pts</strong></p>
+                            <p class="rounded-lg bg-gray-50 p-3 text-sm"><span class="block text-xs font-bold uppercase text-gray-500">Défis validés</span><strong class="mt-1 block text-xl">${analyticsData.validations}</strong></p>
+                            <p class="rounded-lg bg-gray-50 p-3 text-sm"><span class="block text-xs font-bold uppercase text-gray-500">Profils actifs</span><strong class="mt-1 block text-xl">${analyticsData.activePlayers}</strong></p>
+                        </div>
+                        <p class="text-xs text-gray-500">Résultats ${analyticsPeriodLabels[adminAnalyticsPeriod]}, du ${analyticsFromDate.toLocaleDateString('fr-FR')} au ${analyticsToDate.toLocaleDateString('fr-FR')}. Les périodes sans validation restent visibles à zéro.</p>
+                        <div class="overflow-x-auto rounded-lg border border-gray-100">
+                            <table class="w-full min-w-[36rem] text-sm">
+                                <thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th scope="col" class="px-3 py-3 text-left">Période</th><th scope="col" class="px-3 py-3 text-right">Points</th><th scope="col" class="px-3 py-3 text-right">Défis</th><th scope="col" class="px-3 py-3 text-right">Profils actifs</th><th scope="col" class="px-3 py-3">Activité</th></tr></thead>
+                                <tbody>${analyticsRows || '<tr><td colspan="5" class="px-3 py-8 text-center text-gray-400">Aucune validation enregistrée sur cette période.</td></tr>'}</tbody>
+                            </table>
+                        </div>
+                        <p class="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">À savoir : les dates correspondent aux validations encore présentes dans les profils. Si un défi est décoché, sa date disparaît ; ces données ne constituent pas un journal historique complet.</p>
+                    </section>
+                    <section class="space-y-3 rounded-xl border border-gray-100 p-4" aria-label="Observations de la salle">
+                        <div>
+                            <h2 class="text-lg font-black">Observations de la salle</h2>
+                            <p class="mt-1 text-sm text-gray-500">Note les changements d'application, séances ou observations utiles pour mettre les évolutions en contexte.</p>
+                        </div>
+                        <form onsubmit="saveAdminObservation(event)" class="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-end">
+                            <label class="text-sm font-bold text-gray-600">Date
+                                <input name="date" type="date" required value="${formatLocalDateInput(new Date())}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2" />
+                            </label>
+                            <label class="text-sm font-bold text-gray-600">Évolution, séance ou changement effectué
+                                <textarea name="text" maxlength="500" rows="2" required placeholder="Ex. nouvelle version de l'application, changement des ateliers, observation après la séance…" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2"></textarea>
+                            </label>
+                            <button type="submit" class="rounded-lg bg-amber-500 px-4 py-2 font-black text-white hover:bg-amber-600">Ajouter une note</button>
+                        </form>
+                        ${adminObservationsError ? `<p role="alert" class="text-sm font-bold text-red-700">${escapeHtml(adminObservationsError)}</p>` : ''}
+                        <div class="max-h-96 space-y-2 overflow-y-auto">
+                            ${analyticsObservationRows || '<p class="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">Aucune observation enregistrée.</p>'}
+                        </div>
+                        ${adminObservations.length > 30 ? `<p class="text-xs text-gray-500">Les 30 observations les plus récentes sont affichées (${adminObservations.length} au total).</p>` : ''}
+                    </section>
+                        </div>
+                    </details>
+                    <details data-admin-category="rewardStats" ontoggle="setAdminCategoryOpen('rewardStats', this.open)" ${adminCategoryOpen.rewardStats ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">🎁 Historique des cadeaux</summary>
+                        <div class="mt-4 space-y-4">
                     <section class="rounded-2xl bg-white p-5 shadow-sm" aria-label="Statistiques des cadeaux">
                         <div class="mb-2">
                             <h2 class="text-xl font-black">Historique des cadeaux</h2>
@@ -2032,9 +2711,12 @@
                             ${monthlyRewardStats || '<p class="py-4 text-sm text-gray-400">Aucun palier cadeau configuré.</p>'}
                         </div>
                     </section>
+                        </div>
+                    </details>
 
-                    <form onsubmit="saveAdminSettings(event)" class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
-                        <h2 class="text-xl font-black">Mode et apparence</h2>
+                    <details data-admin-category="settings" ontoggle="setAdminCategoryOpen('settings', this.open)" ${adminCategoryOpen.settings ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">⚙️ Mode et apparence</summary>
+                    <form onsubmit="saveAdminSettings(event)" class="mt-4 space-y-4 rounded-2xl bg-white p-5 shadow-sm">
                         <div class="grid gap-4 sm:grid-cols-2">
                             <label class="text-sm font-bold text-gray-600">Mode de l'application
                                 <select name="mode" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${modeOptions}</select>
@@ -2046,7 +2728,11 @@
                         <label class="flex items-center gap-3 font-bold"><input name="challengeEnabled" type="checkbox" ${appSettings.challengeEnabled ? 'checked' : ''} class="h-5 w-5 accent-purple-600" /> Activer le défi saisonnier</label>
                         <button class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Publier les paramètres</button>
                     </form>
+                    </details>
 
+                    <details data-admin-category="rewards" ontoggle="setAdminCategoryOpen('rewards', this.open)" ${adminCategoryOpen.rewards ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">🎁 Progression et cadeaux mensuels</summary>
+                        <div class="mt-4 space-y-4">
                     <section class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
                         <div>
                             <h2 class="text-xl font-black">Progression et cadeaux mensuels</h2>
@@ -2066,19 +2752,26 @@
                             </div>
                         </form>
                     </section>
+                        </div>
+                    </details>
 
-                    <section class="rounded-2xl bg-white p-5 shadow-sm">
+                    <details data-admin-category="players" ontoggle="setAdminCategoryOpen('players', this.open)" ${adminCategoryOpen.players ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">👥 Gestion des joueurs · ${participantCount} profil(s)</summary>
+                    <section class="mt-4 rounded-2xl bg-white p-5 shadow-sm">
                         <div class="mb-3">
                             <h2 class="text-xl font-black">Gestion des joueurs</h2>
-                            <p class="text-sm text-gray-500">Renommer un pseudo problématique ou supprimer son profil et ses points du classement partagé. La gestion des retraits est dans l'onglet dédié.</p>
+                            <p class="text-sm text-gray-500">Un profil reste tant qu'il figure dans un classement. Sinon, il est conservé 31 jours après sa création pour permettre l'accès aux cadeaux, puis supprimé définitivement au prochain passage admin. Les anciennes archives sont aussi nettoyées selon cette règle. Pour les anciens profils sans date de création, le premier score connu (ou le dernier changement s'il n'y a pas de score) sert de date de référence.</p>
                         </div>
                         <div class="max-h-[32rem] overflow-y-auto">
                             ${playerRows || '<p class="py-4 text-sm text-gray-400">Aucun profil joueur enregistré.</p>'}
                         </div>
                     </section>
+                    </details>
 
-                    <div class="grid gap-6 xl:grid-cols-2">
-                        <div class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+                    <div class="grid gap-4">
+                        <details data-admin-category="workshops" ontoggle="setAdminCategoryOpen('workshops', this.open)" ${adminCategoryOpen.workshops ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                            <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">🧗 Ateliers et défis · ${ATELIERS.length} atelier(s)</summary>
+                        <div class="mt-4 space-y-4">
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div><h2 class="text-xl font-black">Personnaliser un atelier</h2><p class="text-sm text-gray-500">Les identifiants restent fixes pour conserver les validations. Modifier les points recalcule aussi les scores déjà enregistrés. Supprimer un défi retire ses validations des scores.</p></div>
                                 <button type="button" onclick="addAdminWorkshop()" class="shrink-0 rounded-xl bg-purple-50 px-4 py-2 font-bold text-purple-700">+ Ajouter un atelier</button>
@@ -2141,9 +2834,12 @@
                             </form>
                             <button type="button" onclick="deleteAdminWorkshop()" ${ATELIERS.length <= 1 ? 'disabled' : ''} class="rounded-xl border border-red-200 bg-white px-4 py-3 font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-40">Supprimer cet atelier</button>
                         </div>
+                        </details>
 
-                        <form onsubmit="saveAdminEvent(event)" class="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
-                            <div><h2 class="text-xl font-black">Défis saisonniers</h2><p class="text-sm text-gray-500">Configure les énigmes et leurs réponses attendues pour Noël, Pâques et Halloween.</p></div>
+                        <details data-admin-category="events" ontoggle="setAdminCategoryOpen('events', this.open)" ${adminCategoryOpen.events ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                            <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">🎃 Défis saisonniers</summary>
+                        <form onsubmit="saveAdminEvent(event)" class="mt-4 space-y-4">
+                            <p class="text-sm text-gray-500">Configure les énigmes et leurs réponses attendues pour Noël, Pâques et Halloween.</p>
                             <label class="block text-sm font-bold text-gray-600">Événement
                                 <select onchange="selectAdminSeason(this.value)" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3">${eventOptions}</select>
                             </label>
@@ -2156,13 +2852,16 @@
                             ${eventChallengeRows}
                             <button class="rounded-xl bg-purple-600 px-5 py-3 font-black text-white">Enregistrer le défi ${EVENT_INFO[adminSelectedSeason].label}</button>
                         </form>
+                        </details>
                     </div>
 
-                    <section class="rounded-2xl bg-white p-5 shadow-sm">
-                        <h2 class="mb-2 text-xl font-black">Réussite des défis de la carte</h2>
+                    <details data-admin-category="challengeStats" ontoggle="setAdminCategoryOpen('challengeStats', this.open)" ${adminCategoryOpen.challengeStats ? 'open' : ''} class="admin-category rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <summary class="cursor-pointer list-none font-black text-gray-900 marker:hidden">📈 Réussite des défis de la carte</summary>
+                    <section class="mt-4 rounded-2xl bg-white p-5 shadow-sm">
                         <p class="mb-3 text-sm text-gray-500">Part des profils participants ayant validé chaque défi au moins une fois.</p>
                         <div class="max-h-[32rem] overflow-y-auto">${challengeStats || '<p class="py-4 text-gray-400">Aucun défi configuré.</p>'}</div>
                     </section>
+                    </details>
                 </section>
             `;
         }
@@ -2177,7 +2876,7 @@
             const isHalloween = !isAdminView && skin === 'halloween';
             const isSeasonal = !isAdminView && skin !== 'classic' && !!activeEventInfo;
 
-            if (!isLogged && currentTab !== 'admin') {
+            if (!hasPseudo && currentTab !== 'admin') {
                 app.innerHTML = `
                     <div class="app-shell theme-classic min-h-screen flex items-center justify-center p-4">
                         <div class="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 p-8 text-center shadow-[0_24px_70px_rgba(76,29,149,0.16)] backdrop-blur-xl">
@@ -2185,11 +2884,12 @@
                                 <i data-lucide="mountain" class="text-white w-12 h-12"></i>
                             </div>
                             <h1 onclick="openAdminGate()" class="mb-2 bg-gradient-to-r from-purple-700 to-teal-500 bg-clip-text text-3xl font-black text-transparent">Climb Up</h1>
-                            <p class="mb-8 font-medium text-gray-500">Fun Climbing <span class="mx-1 text-purple-300">•</span> Défis</p>
+                            <p class="mb-4 font-medium text-gray-500">Fun Climbing <span class="mx-1 text-purple-300">•</span> Défis</p>
+                            <p class="mb-6 text-sm text-gray-500">Pas de compte à créer ni de mot de passe : ton pseudo sert uniquement à afficher tes scores sur cet appareil.</p>
                             
-                            <form onsubmit="handleLogin(event)" class="space-y-4">
+                            <form onsubmit="handlePseudoSubmit(event)" class="space-y-4">
                                 <div>
-                                    <input type="text" id="pseudoInput" placeholder="Choisis ton pseudo..." class="w-full px-4 py-4 rounded-xl bg-gray-50 border-2 border-gray-100 focus:border-purple-500 focus:ring-0 transition-colors text-lg text-center font-bold text-gray-700 outline-none" required />
+                                    <input type="text" id="pseudoInput" maxlength="100" placeholder="Choisis ton pseudo..." class="w-full px-4 py-4 rounded-xl bg-gray-50 border-2 border-gray-100 focus:border-purple-500 focus:ring-0 transition-colors text-lg text-center font-bold text-gray-700 outline-none" required />
                                 </div>
                                 <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95 text-lg">
                                     C'est parti !
@@ -2498,13 +3198,14 @@
                     const redeemedRewards = Array.isArray(currentProfile && currentProfile.redeemedRewards)
                         ? currentProfile.redeemedRewards
                         : [];
-                    const earnedRewards = getEarnedMonthlyRewardEntries(completedDefis);
+                    const rewardAccessActive = hasRewardAccess();
+                    const earnedRewards = rewardAccessActive ? getEarnedMonthlyRewardEntries(completedDefis) : [];
                     html += `
                         <section class="mx-4 mt-6 space-y-4 rounded-3xl border border-purple-100 bg-white/95 p-5 shadow-lg sm:p-7" aria-label="Mes cadeaux gagnés">
                             <div>
                                 <p class="text-xs font-black uppercase tracking-[0.18em] text-purple-600">${escapeHtml(pseudo)} · Historique</p>
                                 <h1 class="mt-1 text-2xl font-black text-slate-900">Mes cadeaux</h1>
-                                <p class="mt-2 text-sm text-gray-600">Présente à l'accueil les cadeaux ouverts pour les récupérer. L'équipe les marquera comme récupérés.</p>
+                                <p class="mt-2 text-sm text-gray-600">${rewardAccessActive ? "Présente à l'accueil les cadeaux ouverts pour les récupérer. L'équipe les marquera comme récupérés." : "Le délai d'accès aux cadeaux de 31 jours après la création du profil est terminé."}</p>
                             </div>
                             ${earnedRewards.length ? `<div class="space-y-3">
                                 ${earnedRewards.map(({ reward, monthKey, claimKey }) => {
@@ -2526,13 +3227,13 @@
                                         </article>
                                     `;
                                 }).join('')}
-                            </div>` : '<div class="rounded-2xl bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">Aucun cadeau gagné pour le moment. Continue à marquer des points pour débloquer le prochain !</div>'}
+                            </div>` : `<div class="rounded-2xl bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">${rewardAccessActive ? 'Aucun cadeau gagné pour le moment. Continue à marquer des points pour débloquer le prochain !' : "Les cadeaux de ce profil ne sont plus accessibles après 31 jours."}</div>`}
                             ${rewardError ? `<p role="alert" class="text-sm font-bold text-red-600">${escapeHtml(rewardError)}</p>` : ''}
                         </section>
                     `;
                 } else {
                     let usersList = [...allUsersData];
-                    if (isLogged) {
+                    if (hasPseudo) {
                         const myIndex = usersList.findIndex(u => u.id === userId);
                         if (myIndex >= 0) {
                             usersList[myIndex].completedDefis = completedDefis;
@@ -2546,6 +3247,7 @@
                     const usersScores = usersList.map(u => {
                         const scores = calculateUserScores(u.completedDefis || {});
                         return { 
+                            userId: u.id,
                             pseudo: u.pseudo || 'Anonyme', 
                             daily: scores.daily, 
                             weekly: scores.weekly, 
@@ -2557,6 +3259,11 @@
                     const dbJour = usersScores.filter(u => u.daily > 0).sort((a,b) => b.daily - a.daily).map((u, i) => ({...u, rank: i+1, score: u.daily}));
                     const dbSemaine = usersScores.filter(u => u.weekly > 0).sort((a,b) => b.weekly - a.weekly).map((u, i) => ({...u, rank: i+1, score: u.weekly}));
                     const dbMois = usersScores.filter(u => u.monthly > 0).sort((a,b) => b.monthly - a.monthly).map((u, i) => ({...u, rank: i+1, score: u.monthly}));
+                    const dbAllTime = allTimeLeaderboard.map((entry, index) => ({
+                        ...entry,
+                        isCurrent: entry.userId === userId,
+                        rank: index + 1
+                    }));
 
                     const buildTable = (data, title, subtitle, bgColor) => `
                         <div class="flex-1 bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100">
@@ -2570,9 +3277,9 @@
                                     <div class="flex items-center p-4 ${p.isCurrent ? 'bg-purple-50' : 'hover:bg-gray-50'}">
                                         <div class="w-8 font-black text-lg ${p.rank === 1 ? 'text-yellow-500' : p.rank === 2 ? 'text-gray-400' : p.rank === 3 ? 'text-orange-500' : 'text-gray-300'}">#${p.rank}</div>
                                         <div class="flex-1 font-bold ${p.isCurrent ? 'text-purple-700' : 'text-gray-700'}">
-                                            ${p.pseudo} ${p.isCurrent ? `<span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>` : ''}
+                                            ${escapeHtml(p.pseudo)} ${p.isCurrent ? `<span class="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full uppercase">Toi</span>` : ''}
                                         </div>
-                                        <div class="font-black ${bgColor.includes('purple') ? 'text-purple-600 bg-purple-100' : 'text-teal-600 bg-teal-100'} px-3 py-1 rounded-full text-sm">${p.score} pts</div>
+                                        <div class="font-black ${bgColor.includes('amber') ? 'text-amber-700 bg-amber-100' : bgColor.includes('purple') ? 'text-purple-600 bg-purple-100' : 'text-teal-600 bg-teal-100'} px-3 py-1 rounded-full text-sm">${p.score} pts</div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -2580,15 +3287,18 @@
                     `;
 
                     html += `
-                        <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="p-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
                             <div class="flex bg-gray-200 rounded-xl p-1 lg:hidden mb-2 col-span-full">
-                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Aujourd'hui</button>
-                                <button onclick="changeLeaderboardTab('semaine')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'semaine' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Cette Semaine</button>
-                                <button onclick="changeLeaderboardTab('mois')" class="flex-1 py-2 font-bold rounded-lg transition-colors ${leaderboardTab === 'mois' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Ce Mois</button>
+                                <button onclick="changeLeaderboardTab('jour')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${leaderboardTab === 'jour' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Jour</button>
+                                <button onclick="changeLeaderboardTab('semaine')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${leaderboardTab === 'semaine' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Semaine</button>
+                                <button onclick="changeLeaderboardTab('mois')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${leaderboardTab === 'mois' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Mois</button>
+                                <button onclick="changeLeaderboardTab('allTime')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${leaderboardTab === 'allTime' ? 'bg-white text-gray-800 shadow' : 'text-gray-500'}">Meilleurs scores</button>
                             </div>
                             <div class="${leaderboardTab !== 'jour' ? 'hidden lg:block' : ''}">${buildTable(dbJour, "Top du Jour", "Réinitialisation à minuit", "bg-gradient-to-r from-purple-600 to-purple-500")}</div>
                             <div class="${leaderboardTab !== 'semaine' ? 'hidden lg:block' : ''}">${buildTable(dbSemaine, "Top de la Semaine", "Réinitialisation lundi à minuit", "bg-gradient-to-r from-teal-500 to-teal-400")}</div>
                             <div class="${leaderboardTab !== 'mois' ? 'hidden lg:block' : ''}">${buildTable(dbMois, "Top du Mois", "Réinitialisation le 1er du mois", "bg-gradient-to-r from-orange-500 to-orange-400")}</div>
+                            <div class="${leaderboardTab !== 'allTime' ? 'hidden lg:block' : ''}">${buildTable(dbAllTime, "Meilleurs scores", "Top 5 permanent", "bg-gradient-to-r from-amber-500 to-yellow-400")}</div>
+                            ${allTimeLeaderboardError ? `<p role="alert" class="col-span-full rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">${escapeHtml(allTimeLeaderboardError)}</p>` : ''}
                         </div>
                     `;
                 }
@@ -2706,15 +3416,20 @@
                     && getCurrentRewardDayKey() !== rewardReceptionDayKey) {
                     syncRewardReceptionListeners();
                 }
+                if (adminAuthorized && usersSnapshotReady && lastProfileMaintenanceDay !== getCurrentRewardDayKey()) {
+                    synchronizeAndRemoveExpiredProfiles();
+                }
             }, 60000);
             
-            onSnapshot(collection(db, "users"), (snapshot) => {
+            onSnapshot(collection(db, "users"), async (snapshot) => {
                 allUsersData = [];
                 let currentProfileChanged = false;
                 snapshot.forEach((userDoc) => {
-                    const userData = { id: userDoc.id, ...userDoc.data() };
+                    const userData = { ...userDoc.data(), id: userDoc.id };
                     allUsersData.push(userData);
                     if (userDoc.id === userId) {
+                        profileCreatedAt = getProfileCreatedAtTimestamp(userData);
+                        localStorage.setItem(profileCreatedAtStorageKey, String(profileCreatedAt));
                         if (typeof userData.pseudo === 'string' && userData.pseudo && userData.pseudo !== pseudo) {
                             pseudo = userData.pseudo;
                             localStorage.setItem('climbup_pseudo', pseudo);
@@ -2728,6 +3443,8 @@
                         }
                     }
                 });
+                usersSnapshotReady = true;
+                await synchronizeAndRemoveExpiredProfiles();
                 if (currentTab === 'classement' || currentTab === 'admin' || currentTab === 'recompenses' || currentProfileChanged) render();
             }, (error) => {
                 console.error("Écoute des profils Firebase échouée :", error);
@@ -2735,6 +3452,18 @@
                     adminError = "Les profils et statistiques ne sont pas accessibles. Vérifie les règles Firestore.";
                     render();
                 }
+            });
+
+            onSnapshot(doc(db, "leaderboards", "allTime"), snapshot => {
+                allTimeLeaderboard = normalizeAllTimeLeaderboardEntries(
+                    snapshot.exists() ? snapshot.data().entries : []
+                );
+                allTimeLeaderboardError = '';
+                if (currentTab === 'classement') render();
+            }, error => {
+                console.error("Lecture du classement historique impossible :", error);
+                allTimeLeaderboardError = "Le classement historique n'est pas accessible. Vérifie les règles Firestore.";
+                if (currentTab === 'classement') render();
             });
 
             onSnapshot(collection(db, "workshopImages"), (snapshot) => {
@@ -2768,7 +3497,7 @@
                     }
                 });
                 rewardImages = nextImages;
-                if (currentTab === 'admin' || (isLogged && appSettings.monthlyRewardsEnabled) || selectedRewardId) render();
+                if (currentTab === 'admin' || (hasPseudo && appSettings.monthlyRewardsEnabled) || selectedRewardId) render();
             }, error => {
                 console.error("Lecture des visuels cadeaux échouée :", error);
                 if (currentTab === 'admin') {
@@ -2802,6 +3531,8 @@
                     }
                 }
                 syncRewardReceptionListeners();
+                syncAdminObservationsListener();
+                if (adminAuthorized && usersSnapshotReady) await synchronizeAndRemoveExpiredProfiles();
                 if (currentTab === 'admin') render();
             }, error => {
                 console.error("Écoute de la session Firebase échouée :", error);
