@@ -665,6 +665,7 @@
         let allUsersData = [];
         let allTimeLeaderboard = [];
         let allTimeLeaderboardError = '';
+        const adminDeletedPlayerIds = new Set();
         let usersSnapshotReady = false;
         let profileMaintenanceInProgress = false;
         let lastProfileMaintenanceDay = '';
@@ -677,6 +678,7 @@
         let adminAuthorized = false;
         let adminError = '';
         let adminMessage = '';
+        let adminPlayerErrors = {};
         let adminTab = 'gestion';
         let adminCategoryOpen = { analytics: true };
         let adminAnalyticsPeriod = 'month';
@@ -1420,7 +1422,7 @@
                     ? user.pseudo.slice(0, 100)
                     : 'Anonyme',
                 score: calculateUserScores(user.completedDefis || {}).total
-            })).filter(entry => entry.score > 0);
+            })).filter(entry => entry.score > 0 && !adminDeletedPlayerIds.has(entry.userId));
             if (!candidates.length) return true;
 
             const leaderboardRef = doc(db, "leaderboards", "allTime");
@@ -1429,10 +1431,11 @@
                     const snapshot = await transaction.get(leaderboardRef);
                     const existingEntries = normalizeAllTimeLeaderboardEntries(
                         snapshot.exists() ? snapshot.data().entries : []
-                    );
+                    ).filter(entry => !adminDeletedPlayerIds.has(entry.userId));
                     const entriesByUser = new Map();
                     existingEntries.forEach(entry => entriesByUser.set(entry.userId, entry));
                     candidates.forEach(candidate => {
+                        if (adminDeletedPlayerIds.has(candidate.userId)) return;
                         const previous = entriesByUser.get(candidate.userId);
                         entriesByUser.set(candidate.userId, {
                             userId: candidate.userId,
@@ -1552,12 +1555,36 @@
                 );
                 const retentionReason = getUserRetentionReason(profileWithCreatedAt, playerId, leaderboardEntries);
                 if (retentionReason) {
-                    if (profile.createdAt !== createdAt) transaction.update(profileRef, { createdAt });
                     return { deleted: false, retentionReason };
                 }
                 transaction.delete(profileRef);
                 return { deleted: true, retentionReason: '' };
             });
+        }
+
+        async function forceDeleteAdminPlayerProfile(playerId) {
+            if (!adminAuthorized || !playerId) throw new Error("Accès administrateur requis.");
+            adminDeletedPlayerIds.add(playerId);
+            const profileRef = doc(db, "users", playerId);
+            const leaderboardRef = doc(db, "leaderboards", "allTime");
+            try {
+                return await runTransaction(db, async transaction => {
+                    const profileSnapshot = await transaction.get(profileRef);
+                    const leaderboardSnapshot = await transaction.get(leaderboardRef);
+                    const entries = normalizeAllTimeLeaderboardEntries(
+                        leaderboardSnapshot.exists() ? leaderboardSnapshot.data().entries : []
+                    ).filter(entry => entry.userId !== playerId);
+                    if (profileSnapshot.exists()) transaction.delete(profileRef);
+                    if (leaderboardSnapshot.exists()
+                        && entries.length !== normalizeAllTimeLeaderboardEntries(leaderboardSnapshot.data().entries).length) {
+                        transaction.set(leaderboardRef, { entries });
+                    }
+                    return { deleted: profileSnapshot.exists(), entries };
+                });
+            } catch (error) {
+                adminDeletedPlayerIds.delete(playerId);
+                throw error;
+            }
         }
 
         async function removeExpiredArchivedProfiles() {
@@ -1612,6 +1639,24 @@
                 restoredCount += results.filter(result => result === 'restored').length;
             }
             return { deletedCount, restoredCount, failedCount };
+        }
+
+        async function removeOrphanedAllTimeLeaderboardEntries(users = allUsersData) {
+            if (!adminAuthorized || !usersSnapshotReady) return;
+            const activeUserIds = new Set(users.map(user => user.id));
+            const leaderboardRef = doc(db, "leaderboards", "allTime");
+            const entries = await runTransaction(db, async transaction => {
+                const snapshot = await transaction.get(leaderboardRef);
+                const existingEntries = normalizeAllTimeLeaderboardEntries(
+                    snapshot.exists() ? snapshot.data().entries : []
+                );
+                const activeEntries = existingEntries.filter(entry => activeUserIds.has(entry.userId));
+                if (activeEntries.length !== existingEntries.length) {
+                    transaction.set(leaderboardRef, { entries: activeEntries });
+                }
+                return activeEntries;
+            });
+            allTimeLeaderboard = entries;
         }
 
         async function removeExpiredProfiles(users = allUsersData) {
@@ -1669,7 +1714,9 @@
         async function synchronizeAndRemoveExpiredProfiles() {
             if (!adminAuthorized || !usersSnapshotReady) return;
             const leaderboardSynchronized = await updateAllTimeLeaderboard(allUsersData);
-            if (leaderboardSynchronized) await removeExpiredProfiles(allUsersData);
+            if (!leaderboardSynchronized) return;
+            await removeOrphanedAllTimeLeaderboardEntries(allUsersData);
+            await removeExpiredProfiles(allUsersData);
         }
 
         function getActiveRewardReceptionEntries() {
@@ -2150,27 +2197,31 @@
             const playerId = row && row.dataset.playerId;
             const player = allUsersData.find(item => item.id === playerId);
             if (!playerId || !player) return;
-            const retentionReason = getUserRetentionReason(player, playerId);
-            if (retentionReason) {
-                adminMessage = `Le profil « ${player.pseudo || 'Anonyme'} » est conservé : ${retentionReason}.`;
-                adminError = '';
-                render();
-                return;
-            }
-            if (!window.confirm(`Supprimer définitivement le profil « ${player.pseudo || 'Anonyme'} » ? Il ne figure dans aucun classement et son délai cadeau de 31 jours est terminé. Cette suppression est irréversible.`)) return;
+            if (!window.confirm(`Forcer la suppression définitive du profil « ${player.pseudo || 'Anonyme'} » ? Cette action ignore les règles de conservation, retire aussi son record du top permanent et est irréversible.`)) return;
+            delete adminPlayerErrors[playerId];
             try {
-                const result = await deleteExpiredUserProfile(playerId);
-                if (!result.deleted) {
-                    adminMessage = `Le profil est conservé : ${result.retentionReason || "il n'est plus actif."}`;
-                } else {
-                    allUsersData = allUsersData.filter(item => item.id !== playerId);
-                    adminMessage = "Le profil et ses données ont été supprimés définitivement.";
+                await forceDeleteAdminPlayerProfile(playerId);
+                allUsersData = allUsersData.filter(item => item.id !== playerId);
+                allTimeLeaderboard = allTimeLeaderboard.filter(entry => entry.userId !== playerId);
+                delete adminPlayerErrors[playerId];
+                if (playerId === userId) {
+                    pseudo = '';
+                    hasPseudo = false;
+                    completedDefis = {};
+                    openedMonthlyRewards = [];
+                    profileCreatedAt = Date.now();
+                    localStorage.removeItem('climbup_pseudo');
+                    localStorage.removeItem('climbup_defis');
+                    localStorage.removeItem(openedMonthlyRewardsStorageKey);
+                    localStorage.setItem(profileCreatedAtStorageKey, String(profileCreatedAt));
                 }
+                adminMessage = "Profil supprimé définitivement, règles de conservation ignorées et record permanent retiré.";
                 adminError = '';
             } catch (error) {
                 console.error("Suppression du profil impossible :", error);
-                adminError = "Suppression impossible. Vérifie les règles Firestore admin et réessaie.";
-                adminMessage = '';
+                adminPlayerErrors[playerId] = error.code === 'permission-denied'
+                    ? "Suppression refusée par Firestore : vérifie que les règles publiées autorisent la suppression admin et que ton compte a le rôle admin."
+                    : `Suppression impossible (${error.code || 'erreur inconnue'}). Vérifie la connexion et réessaie.`;
             }
             render();
         };
@@ -2555,19 +2606,24 @@
             }).join('');
             const playerRows = [...allUsersData]
                 .sort((first, second) => String(first.pseudo || '').localeCompare(String(second.pseudo || ''), 'fr'))
-                .map(user => `
-                    <div data-player-row data-player-id="${escapeHtml(user.id)}" class="grid gap-3 border-b border-gray-100 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                        <div class="min-w-0">
-                            <label class="sr-only" for="player-pseudo-${escapeHtml(user.id)}">Pseudo du joueur</label>
-                            <input id="player-pseudo-${escapeHtml(user.id)}" name="playerPseudo" maxlength="30" value="${escapeHtml(user.pseudo || '')}" class="w-full rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-800" />
-                            <p class="mt-1 text-xs text-gray-500">${calculateUserScores(user.completedDefis || {}).total} pts · profil ${escapeHtml(String(user.id).slice(0, 14))}</p>
+                .map(user => {
+                    const retentionReason = getUserRetentionReason(user, user.id);
+                    return `
+                        <div data-player-row data-player-id="${escapeHtml(user.id)}" class="grid gap-3 border-b border-gray-100 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                            <div class="min-w-0">
+                                <label class="sr-only" for="player-pseudo-${escapeHtml(user.id)}">Pseudo du joueur</label>
+                                <input id="player-pseudo-${escapeHtml(user.id)}" name="playerPseudo" maxlength="30" value="${escapeHtml(user.pseudo || '')}" class="w-full rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-800" />
+                                <p class="mt-1 text-xs text-gray-500">${calculateUserScores(user.completedDefis || {}).total} pts · profil ${escapeHtml(String(user.id).slice(0, 14))}</p>
+                                ${retentionReason ? `<p class="mt-1 text-xs font-semibold text-amber-700">Nettoyage automatique suspendu : ${escapeHtml(retentionReason)}. L'admin peut forcer la suppression.</p>` : ''}
+                                ${adminPlayerErrors[user.id] ? `<p role="alert" class="mt-1 text-xs font-semibold text-red-700">${escapeHtml(adminPlayerErrors[user.id])}</p>` : ''}
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="renameAdminPlayer(this)" class="flex-1 rounded-lg bg-purple-50 px-3 py-2 text-sm font-bold text-purple-700 sm:flex-none">Renommer</button>
+                                <button type="button" onclick="deleteAdminPlayer(this)" class="flex-1 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 sm:flex-none">Forcer la suppression</button>
+                            </div>
                         </div>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="renameAdminPlayer(this)" class="flex-1 rounded-lg bg-purple-50 px-3 py-2 text-sm font-bold text-purple-700 sm:flex-none">Renommer</button>
-                            <button type="button" onclick="deleteAdminPlayer(this)" class="flex-1 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 sm:flex-none">Supprimer</button>
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             const rewardEditorRows = adminRewardDraft
                 .slice()
                 .sort((first, second) => Number(first.points) - Number(second.points))
@@ -2760,9 +2816,9 @@
                     <section class="mt-4 rounded-2xl bg-white p-5 shadow-sm">
                         <div class="mb-3">
                             <h2 class="text-xl font-black">Gestion des joueurs</h2>
-                            <p class="text-sm text-gray-500">Un profil reste tant qu'il figure dans un classement. Sinon, il est conservé 31 jours après sa création pour permettre l'accès aux cadeaux, puis supprimé définitivement au prochain passage admin. Les anciennes archives sont aussi nettoyées selon cette règle. Pour les anciens profils sans date de création, le premier score connu (ou le dernier changement s'il n'y a pas de score) sert de date de référence.</p>
+                            <p class="text-sm text-gray-500">Le nettoyage automatique conserve les profils présents dans un classement ou âgés de moins de 31 jours. L'administrateur peut toutefois forcer leur suppression définitive, y compris en cas de triche.</p>
                         </div>
-                        <div class="max-h-[32rem] overflow-y-auto">
+                        <div id="admin-player-list" class="max-h-[32rem] overflow-y-auto">
                             ${playerRows || '<p class="py-4 text-sm text-gray-400">Aucun profil joueur enregistré.</p>'}
                         </div>
                     </section>
@@ -2869,6 +2925,8 @@
         // --- RENDU ---
         function render() {
             const app = document.getElementById('app');
+            const existingPlayerList = document.getElementById('admin-player-list');
+            const playerListScrollTop = existingPlayerList ? existingPlayerList.scrollTop : null;
             const activeEventInfo = EVENT_INFO[appSettings.mode];
             const challengeAvailable = appSettings.challengeEnabled && !!activeEventInfo;
             const isAdminView = currentTab === 'admin';
@@ -3232,16 +3290,7 @@
                         </section>
                     `;
                 } else {
-                    let usersList = [...allUsersData];
-                    if (hasPseudo) {
-                        const myIndex = usersList.findIndex(u => u.id === userId);
-                        if (myIndex >= 0) {
-                            usersList[myIndex].completedDefis = completedDefis;
-                            usersList[myIndex].pseudo = pseudo;
-                        } else {
-                            usersList.push({ id: userId, pseudo: pseudo, completedDefis: completedDefis });
-                        }
-                    }
+                    const usersList = [...allUsersData];
 
                     // SÉCURITÉ AJOUTÉE ICI : "u.pseudo || 'Anonyme'" empêche tout undefined
                     const usersScores = usersList.map(u => {
@@ -3259,7 +3308,10 @@
                     const dbJour = usersScores.filter(u => u.daily > 0).sort((a,b) => b.daily - a.daily).map((u, i) => ({...u, rank: i+1, score: u.daily}));
                     const dbSemaine = usersScores.filter(u => u.weekly > 0).sort((a,b) => b.weekly - a.weekly).map((u, i) => ({...u, rank: i+1, score: u.weekly}));
                     const dbMois = usersScores.filter(u => u.monthly > 0).sort((a,b) => b.monthly - a.monthly).map((u, i) => ({...u, rank: i+1, score: u.monthly}));
-                    const dbAllTime = allTimeLeaderboard.map((entry, index) => ({
+                    const activeUserIds = new Set(allUsersData.map(user => user.id));
+                    const dbAllTime = allTimeLeaderboard
+                        .filter(entry => activeUserIds.has(entry.userId))
+                        .map((entry, index) => ({
                         ...entry,
                         isCurrent: entry.userId === userId,
                         rank: index + 1
@@ -3403,6 +3455,10 @@
 
                 html += `</div>`;
                 app.innerHTML = html;
+                if (playerListScrollTop !== null) {
+                    const playerList = document.getElementById('admin-player-list');
+                    if (playerList) playerList.scrollTop = playerListScrollTop;
+                }
             }
 
             if (window.lucide) { lucide.createIcons(); }
@@ -3425,6 +3481,7 @@
                 allUsersData = [];
                 let currentProfileChanged = false;
                 snapshot.forEach((userDoc) => {
+                    if (adminDeletedPlayerIds.has(userDoc.id)) return;
                     const userData = { ...userDoc.data(), id: userDoc.id };
                     allUsersData.push(userData);
                     if (userDoc.id === userId) {
